@@ -29,3 +29,11 @@ export interface ContactRow {
 export type JobStatus = "pending" | "processing" | "complete" | "failed";
 
 export type LLMProviderMode = "cloud" | "local" | "byok";
+
+export interface ProgressEvent {
+  type: "progress" | "heartbeat";
+  stage: string;
+  stageIndex: number;
+  copy: string;
+  contactCount?: number;
+}
