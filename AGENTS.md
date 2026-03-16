@@ -13,10 +13,19 @@ This is a monolith — all frontend and backend logic lives in one Next.js app. 
 - **Dev server:** `npm run dev` (port 3000)
 - **Build:** `npm run build`
 - **Lint:** `npm run lint`
+- **DB push:** `npm run db:push` (requires `DATABASE_URL`)
+
+### Key architecture decisions
+
+- **BetterAuth** handles all auth. Config in `src/lib/auth.ts`, client in `src/lib/auth-client.ts`, API route at `src/app/api/auth/[...all]/route.ts`.
+- **Drizzle ORM** for all DB access. Schema in `src/db/schema.ts`. Only stores job metadata — never email content.
+- **All service clients (DB, Stripe, Resend) use lazy initialization** via Proxy to avoid build-time errors when env vars aren't set.
+- **All API routes use `export const dynamic = "force-dynamic"`** to prevent Next.js from trying to pre-render them at build time.
+- **Three LLM modes**: Cloud (OpenRouter server-side), Local (Ollama client-side), BYOK (user's own API key).
 
 ### Key gotchas
 
-- **shadcn/ui components are pinned to Tailwind v3 compatible versions.** The `shadcn@latest` CLI generates Tailwind v4 / `@base-ui/react` components by default, but this project uses Next.js 14 + Tailwind v3. All shadcn UI components in `src/components/ui/` have been manually rewritten to use `@radix-ui/react-*` primitives. If adding new shadcn components, you must convert them to Tailwind v3 style (HSL CSS variables, `@radix-ui` primitives, no `@base-ui/react` imports).
-- **No `.env.local` is committed.** The app requires several environment variables for full functionality (see `design.md` Section 2). For dev server startup alone, no env vars are needed — the landing page and static pages render without them.
-- **Font files:** Geist font `.woff` files exist in `src/app/fonts/` from the Next.js scaffold but are not used; the layout uses Google Fonts (Playfair Display + Inter).
-- **No database or external services needed for basic dev.** The dev server starts and all pages render without Postgres, Stripe, Google OAuth, or OpenRouter configured. Those are only needed when implementing the full pipeline.
+- **shadcn/ui components are pinned to Tailwind v3 compatible versions.** The `shadcn@latest` CLI generates Tailwind v4 / `@base-ui/react` components by default, but this project uses Next.js 14 + Tailwind v3. All components in `src/components/ui/` use `@radix-ui/react-*` primitives. If adding new components, you must convert them.
+- **No `.env.local` is committed.** Copy `.env.example` to `.env.local` and fill in values. The dev server starts without env vars — landing page and static pages render fine.
+- **`useSearchParams` requires Suspense boundary** — the processing page wraps its content in `<Suspense>` for this reason.
+- **Pipeline progress uses an in-memory Map** (`progressStore` in `pipeline.ts`). This works for single-instance dev but won't persist across serverless function instances in production.
