@@ -46,7 +46,7 @@ export function SampleCsv() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ delay: 0.2 }}
-          className="overflow-x-auto rounded-3xl border border-black/5 bg-white/50 backdrop-blur-sm p-2 shadow-sm"
+          className="overflow-x-auto rounded-3xl border border-black/5 bg-white/50 backdrop-blur-sm p-2 shadow-sm mb-6"
         >
           <div className="overflow-hidden rounded-2xl">
             <table className="w-full text-sm">
@@ -76,6 +76,22 @@ export function SampleCsv() {
               </tbody>
             </table>
           </div>
+        </motion.div>
+        
+        <motion.div 
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.4 }}
+          className="text-center"
+        >
+          <a 
+            href="/sample.csv" 
+            download
+            className="inline-flex items-center justify-center text-sm font-medium text-[--brand-muted] hover:text-[--brand-ink] transition-colors border border-transparent hover:border-black/5 bg-transparent hover:bg-white/50 rounded-full px-4 py-2"
+          >
+            Download sample .csv
+          </a>
         </motion.div>
       </div>
     </section>

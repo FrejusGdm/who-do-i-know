@@ -4,7 +4,8 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { X } from "lucide-react";
+import { X, Loader2, Lock } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import type { FilterConfig, LLMProviderMode } from "@/types";
 
 const DEFAULT_BLOCKED_DOMAINS = [
@@ -51,6 +52,7 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
   const [estimatedContacts, setEstimatedContacts] = useState<number | null>(
     null
   );
+  const [teaseState, setTeaseState] = useState<"idle" | "scanning" | "teased">("idle");
   const debounceRef = useRef<NodeJS.Timeout>();
 
   const getFilterConfig = useCallback((): FilterConfig => ({
@@ -122,12 +124,119 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
     setDomainInput("");
   };
 
-  const handleSubmit = () => {
+  const handleInitialSubmit = () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    setTeaseState("scanning");
+    // Simulate a deep scan to build anticipation
+    setTimeout(() => {
+      setTeaseState("teased");
+    }, 2800);
+  };
+
+  const handleFinalSubmit = () => {
     onSubmit(getFilterConfig(), providerMode, byokApiKey || undefined);
   };
 
+  if (teaseState === "scanning") {
+    return (
+      <div className="py-24 text-center space-y-6">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="flex justify-center"
+        >
+          <div className="w-24 h-24 rounded-full bg-[--brand-ink]/5 flex items-center justify-center relative">
+            <div className="absolute inset-0 rounded-full border-4 border-black/5 border-t-[--brand-ink] animate-spin" />
+            <Loader2 className="w-8 h-8 text-[--brand-ink] animate-spin" />
+          </div>
+        </motion.div>
+        <h2 className="font-serif text-4xl text-[--brand-ink]">Deep Scanning Inbox...</h2>
+        <div className="space-y-2 text-[--brand-muted]">
+          <p className="animate-pulse">Analyzing communication history...</p>
+          <p className="animate-pulse delay-150">Filtering newsletters & spam...</p>
+          <p className="animate-pulse delay-300">Mapping relationships...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (teaseState === "teased") {
+    const fakeData = Array(5).fill(0);
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="space-y-8"
+      >
+        <div className="text-center space-y-4">
+          <h2 className="font-serif text-5xl md:text-6xl text-[--brand-ink]">
+            {estimatedContacts ? `~${estimatedContacts}` : "Hundreds of"} People Found.
+          </h2>
+          <p className="text-xl text-[--brand-muted] font-light">
+            We've identified your real network. Unlock the full CSV to see everyone.
+          </p>
+        </div>
+
+        <div className="overflow-x-auto rounded-3xl border border-black/5 bg-white/50 backdrop-blur-sm p-2 shadow-sm relative">
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white/80 to-white/95 z-10 pointer-events-none flex flex-col items-center justify-end pb-12">
+            <Lock className="w-8 h-8 text-[--brand-ink] mb-4" />
+            <p className="text-[--brand-ink] font-medium text-lg">Results Locked</p>
+          </div>
+          <div className="overflow-hidden rounded-2xl select-none filter blur-[3px] opacity-60">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-black/5 text-[--brand-ink]">
+                  <th className="text-left p-4 font-medium">Name</th>
+                  <th className="text-left p-4 font-medium">Email</th>
+                  <th className="text-left p-4 font-medium">Type</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white">
+                {fakeData.map((_, i) => (
+                  <tr key={i} className="border-b border-black/5">
+                    <td className="p-4 font-medium">██████ ████</td>
+                    <td className="p-4">██████@████.com</td>
+                    <td className="p-4">
+                      <span className="px-3 py-1 rounded-full bg-black/5 text-[--brand-ink] text-xs font-medium">
+                        ██████
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="pt-8 text-center max-w-md mx-auto space-y-4">
+          <Button
+            size="lg"
+            onClick={handleFinalSubmit}
+            disabled={isSubmitting}
+            className="w-full bg-[--brand-ink] text-[--brand-cream] hover:bg-black/80 text-lg py-7 rounded-full font-medium transition-all duration-300 shadow-xl"
+          >
+            {isSubmitting ? "Creating checkout..." : "Pay $9 to Unlock Full CSV"}
+          </Button>
+          <button 
+            onClick={() => setTeaseState("idle")}
+            className="text-sm text-[--brand-muted] hover:text-[--brand-ink] transition-colors"
+          >
+            Wait, let me adjust my filters
+          </button>
+        </div>
+      </motion.div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
+    <>
+      <h1 className="font-serif text-5xl md:text-6xl tracking-tight text-[--brand-ink] mb-4">
+        Configure Your Scan
+      </h1>
+      <p className="text-lg text-[--brand-muted] mb-12 font-light">
+        Shape what gets scanned before you pay.
+      </p>
+      <div className="space-y-6">
       {/* Date Range */}
       <section className="p-8 bg-white/50 backdrop-blur-sm rounded-3xl border border-black/5">
         <h2 className="font-serif text-2xl text-[--brand-ink] mb-2">Date Range</h2>
@@ -344,7 +453,7 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
         )}
         <Button
           size="lg"
-          onClick={handleSubmit}
+          onClick={handleInitialSubmit}
           disabled={
             isSubmitting ||
             (providerMode === "local" && ollamaStatus !== "connected") ||
@@ -352,7 +461,7 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
           }
           className="w-full bg-[--brand-ink] text-[--brand-cream] hover:bg-black/80 text-lg py-7 rounded-full font-medium transition-all duration-300 shadow-xl"
         >
-          {isSubmitting ? "Creating checkout..." : "Continue to Payment — $9"}
+          {isSubmitting ? "Creating checkout..." : "Scan Inbox & Continue"}
         </Button>
       </div>
     </div>
