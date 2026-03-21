@@ -127,37 +127,37 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Date Range */}
-      <section className="p-6 bg-white rounded-lg border border-[--brand-muted]/20">
-        <h2 className="font-semibold mb-3">Date Range</h2>
-        <p className="text-sm text-[--brand-muted] mb-3">
+      <section className="p-8 bg-white/50 backdrop-blur-sm rounded-3xl border border-black/5">
+        <h2 className="font-serif text-2xl text-[--brand-ink] mb-2">Date Range</h2>
+        <p className="text-sm text-[--brand-muted] mb-6">
           Only include emails after this date
         </p>
         <input
           type="date"
           value={afterDate}
           onChange={(e) => setAfterDate(e.target.value)}
-          className="w-full px-3 py-2 border border-[--brand-muted]/20 rounded-md text-sm"
+          className="w-full px-5 py-3 bg-white border border-black/5 rounded-full text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[--brand-ink]/20 transition-all"
         />
       </section>
 
       {/* Domain Blocklist */}
-      <section className="p-6 bg-white rounded-lg border border-[--brand-muted]/20">
-        <h2 className="font-semibold mb-3">Domain Blocklist</h2>
-        <p className="text-sm text-[--brand-muted] mb-3">
+      <section className="p-8 bg-white/50 backdrop-blur-sm rounded-3xl border border-black/5">
+        <h2 className="font-serif text-2xl text-[--brand-ink] mb-2">Domain Blocklist</h2>
+        <p className="text-sm text-[--brand-muted] mb-6">
           Exclude emails from these domains
         </p>
-        <div className="flex gap-2 mb-3">
+        <div className="flex gap-2 mb-4">
           <input
             type="text"
             value={domainInput}
             onChange={(e) => setDomainInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && addDomain()}
             placeholder="e.g. mailchimp.com"
-            className="flex-1 px-3 py-2 border border-[--brand-muted]/20 rounded-md text-sm"
+            className="flex-1 px-5 py-3 bg-white border border-black/5 rounded-full text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[--brand-ink]/20 transition-all"
           />
-          <Button variant="outline" size="sm" onClick={addDomain}>
+          <Button variant="outline" className="rounded-full px-6 bg-white border-black/5" onClick={addDomain}>
             Add
           </Button>
         </div>
@@ -165,15 +165,16 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
           {blockedDomains.map((d) => (
             <span
               key={d}
-              className="inline-flex items-center gap-1 px-2.5 py-1 bg-[--brand-muted]/10 rounded-full text-xs"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-black/5 rounded-full text-xs text-[--brand-muted] shadow-sm"
             >
               {d}
               <button
                 onClick={() =>
                   setBlockedDomains(blockedDomains.filter((x) => x !== d))
                 }
+                className="hover:text-[--brand-ink] transition-colors"
               >
-                <X className="w-3 h-3" />
+                <X className="w-3.5 h-3.5" />
               </button>
             </span>
           ))}
@@ -181,9 +182,9 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
       </section>
 
       {/* Category Toggles */}
-      <section className="p-6 bg-white rounded-lg border border-[--brand-muted]/20">
-        <h2 className="font-semibold mb-3">Gmail Categories to Skip</h2>
-        <div className="space-y-3">
+      <section className="p-8 bg-white/50 backdrop-blur-sm rounded-3xl border border-black/5">
+        <h2 className="font-serif text-2xl text-[--brand-ink] mb-6">Gmail Categories to Skip</h2>
+        <div className="space-y-4">
           {[
             { label: "Promotions", value: skipPromotions, set: setSkipPromotions },
             { label: "Updates", value: skipUpdates, set: setSkipUpdates },
@@ -194,7 +195,7 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
               key={toggle.label}
               className="flex items-center justify-between"
             >
-              <span className="text-sm">{toggle.label}</span>
+              <span className="text-sm font-medium text-[--brand-ink]">{toggle.label}</span>
               <Switch
                 checked={toggle.value}
                 onCheckedChange={toggle.set}
@@ -205,11 +206,11 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
       </section>
 
       {/* Min Interactions */}
-      <section className="p-6 bg-white rounded-lg border border-[--brand-muted]/20">
-        <h2 className="font-semibold mb-3">Minimum Interactions</h2>
-        <p className="text-sm text-[--brand-muted] mb-4">
+      <section className="p-8 bg-white/50 backdrop-blur-sm rounded-3xl border border-black/5">
+        <h2 className="font-serif text-2xl text-[--brand-ink] mb-2">Minimum Interactions</h2>
+        <p className="text-sm text-[--brand-muted] mb-8">
           Only include people you&apos;ve exchanged at least{" "}
-          <strong>{minInteractions}</strong> emails with
+          <strong className="text-[--brand-ink] font-medium">{minInteractions}</strong> emails with
         </p>
         <Slider
           value={[minInteractions]}
@@ -217,16 +218,17 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
           min={1}
           max={5}
           step={1}
+          className="mb-4"
         />
-        <div className="flex justify-between text-xs text-[--brand-muted] mt-1">
+        <div className="flex justify-between text-xs text-[--brand-muted] font-medium">
           <span>1 (everyone)</span>
           <span>5 (close contacts only)</span>
         </div>
       </section>
 
       {/* LLM Provider */}
-      <section className="p-6 bg-white rounded-lg border border-[--brand-muted]/20">
-        <h2 className="font-semibold mb-3">Processing Mode</h2>
+      <section className="p-8 bg-white/50 backdrop-blur-sm rounded-3xl border border-black/5">
+        <h2 className="font-serif text-2xl text-[--brand-ink] mb-6">Processing Mode</h2>
         <div className="space-y-3">
           {(
             [
@@ -249,10 +251,10 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
           ).map((opt) => (
             <label
               key={opt.mode}
-              className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+              className={`flex items-start gap-4 p-5 rounded-2xl border cursor-pointer transition-all ${
                 providerMode === opt.mode
-                  ? "border-[--brand-ink] bg-[--brand-ink]/5"
-                  : "border-[--brand-muted]/20 hover:border-[--brand-muted]/40"
+                  ? "border-[--brand-ink] bg-white shadow-sm"
+                  : "border-black/5 hover:border-black/10 hover:bg-white/40"
               }`}
             >
               <input
@@ -261,18 +263,18 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
                 value={opt.mode}
                 checked={providerMode === opt.mode}
                 onChange={() => setProviderMode(opt.mode)}
-                className="mt-1"
+                className="mt-1 border-black/10 text-[--brand-ink] focus:ring-[--brand-ink]"
               />
               <div>
-                <p className="font-medium text-sm">{opt.label}</p>
-                <p className="text-xs text-[--brand-muted]">{opt.desc}</p>
+                <p className="font-medium text-[--brand-ink]">{opt.label}</p>
+                <p className="text-sm text-[--brand-muted] mt-1">{opt.desc}</p>
               </div>
             </label>
           ))}
         </div>
 
         {providerMode === "local" && (
-          <div className="mt-4 p-3 bg-[--brand-muted]/5 rounded-lg">
+          <div className="mt-4 p-5 bg-white rounded-2xl border border-black/5 shadow-sm">
             {ollamaStatus === "checking" && (
               <p className="text-sm text-[--brand-muted]">
                 Checking Ollama connection...
@@ -280,13 +282,13 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
             )}
             {ollamaStatus === "connected" && (
               <div>
-                <p className="text-sm text-[--brand-ink] mb-2">
+                <p className="text-sm font-medium text-[--brand-ink] mb-3">
                   Ollama connected
                 </p>
                 <select
                   value={selectedOllamaModel}
                   onChange={(e) => setSelectedOllamaModel(e.target.value)}
-                  className="w-full px-3 py-2 border border-[--brand-muted]/20 rounded-md text-sm"
+                  className="w-full px-4 py-2.5 bg-white border border-black/5 rounded-full text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[--brand-ink]/20"
                 >
                   {ollamaModels.map((m) => (
                     <option key={m} value={m}>
@@ -298,21 +300,21 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
             )}
             {ollamaStatus === "disconnected" && (
               <div>
-                <p className="text-sm text-[--brand-muted] mb-2">
+                <p className="text-sm font-medium text-[--brand-ink] mb-2">
                   Ollama not detected at localhost:11434
                 </p>
-                <p className="text-xs text-[--brand-muted] mb-2">
+                <p className="text-sm text-[--brand-muted] mb-4 leading-relaxed">
                   Install Ollama from{" "}
                   <a
                     href="https://ollama.com"
                     target="_blank"
-                    className="underline"
+                    className="text-[--brand-ink] hover:underline"
                   >
                     ollama.com
                   </a>
-                  , then run: <code>ollama pull llama3.1:8b</code>
+                  , then run: <code className="bg-black/5 px-1.5 py-0.5 rounded text-xs">ollama pull llama3.1:8b</code>
                 </p>
-                <Button variant="outline" size="sm" onClick={checkOllama}>
+                <Button variant="outline" className="rounded-full bg-white border-black/5" onClick={checkOllama}>
                   Try Again
                 </Button>
               </div>
@@ -327,17 +329,17 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
               value={byokApiKey}
               onChange={(e) => setByokApiKey(e.target.value)}
               placeholder="Your OpenRouter API key"
-              className="w-full px-3 py-2 border border-[--brand-muted]/20 rounded-md text-sm"
+              className="w-full px-5 py-3 bg-white border border-black/5 rounded-full text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[--brand-ink]/20 transition-all"
             />
           </div>
         )}
       </section>
 
       {/* Estimate & Submit */}
-      <div className="text-center">
+      <div className="pt-8 text-center">
         {estimatedContacts !== null && (
-          <p className="text-sm text-[--brand-muted] mb-4">
-            ~{estimatedContacts} threads estimated (actual contacts may vary)
+          <p className="text-sm font-medium text-[--brand-muted] mb-4 bg-white/50 backdrop-blur-sm border border-black/5 rounded-full py-2 px-4 inline-block">
+            ~{estimatedContacts} threads estimated <span className="font-normal opacity-70">(actual contacts may vary)</span>
           </p>
         )}
         <Button
@@ -348,7 +350,7 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
             (providerMode === "local" && ollamaStatus !== "connected") ||
             (providerMode === "byok" && !byokApiKey)
           }
-          className="w-full bg-[--brand-ink] text-[--brand-cream] hover:bg-[--brand-gold] hover:text-[--brand-cream] text-lg py-6 font-semibold transition-all duration-300"
+          className="w-full bg-[--brand-ink] text-[--brand-cream] hover:bg-black/80 text-lg py-7 rounded-full font-medium transition-all duration-300 shadow-xl"
         >
           {isSubmitting ? "Creating checkout..." : "Continue to Payment — $9"}
         </Button>

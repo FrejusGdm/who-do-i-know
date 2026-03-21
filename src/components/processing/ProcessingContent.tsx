@@ -110,24 +110,23 @@ export function ProcessingContent() {
         animate={{ opacity: 1, y: 0 }}
         className="max-w-md w-full"
       >
-        <h1 className="font-serif text-3xl font-bold text-center mb-2">
+        <h1 className="font-serif text-4xl md:text-5xl tracking-tight text-center text-[--brand-ink] mb-4">
           Processing Your Network
         </h1>
-        <p className="text-center text-sm text-[--brand-muted] mb-8">
-          Usually 2–5 minutes
+        <p className="text-center text-lg text-[--brand-muted] mb-12 font-light">
+          Usually takes 2–5 minutes
         </p>
 
         {error ? (
-          <div className="p-6 bg-[--brand-muted]/5 border border-[--brand-muted]/20 rounded-lg text-center">
-            <AlertCircle className="w-8 h-8 text-[--brand-ink] mx-auto mb-3" />
-            <p className="text-sm text-[--brand-ink] mb-4">{error}</p>
-            <p className="text-xs text-[--brand-muted]">
+          <div className="p-8 bg-white/50 backdrop-blur-sm border border-black/5 rounded-3xl text-center shadow-sm">
+            <AlertCircle className="w-10 h-10 text-[--brand-ink] mx-auto mb-4" strokeWidth={1.5} />
+            <p className="text-base text-[--brand-ink] mb-6">{error}</p>
+            <p className="text-sm text-[--brand-muted] mb-6">
               Need help? Contact support@whodoyouknow.xyz
             </p>
             <Button
               variant="outline"
-              size="sm"
-              className="mt-3"
+              className="rounded-full px-8 bg-white border-black/5 shadow-sm"
               onClick={() => window.location.reload()}
             >
               Refresh

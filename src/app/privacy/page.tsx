@@ -1,21 +1,21 @@
 export default function PrivacyPage() {
   return (
-    <main className="min-h-screen bg-[--brand-cream] py-12 px-6">
+    <main className="min-h-screen bg-[--brand-cream] py-24 px-6">
       <div className="max-w-2xl mx-auto">
-        <h1 className="font-serif text-4xl font-bold mb-2">Privacy Policy</h1>
-        <p className="text-sm text-[--brand-muted] mb-8">Last updated: January 2026</p>
+        <h1 className="font-serif text-5xl md:text-6xl tracking-tight text-[--brand-ink] mb-4">Privacy Policy</h1>
+        <p className="text-lg font-light text-[--brand-muted] mb-16">Last updated: January 2026</p>
 
-        <div className="space-y-6 text-[--brand-muted] leading-relaxed">
+        <div className="space-y-12 text-[--brand-muted] leading-relaxed">
           <p>
             WhoDoYouKnow (&quot;we&quot;, &quot;our&quot;, &quot;us&quot;) is committed to protecting your
             privacy.
           </p>
 
           <section>
-            <h2 className="text-lg font-semibold text-[--brand-ink] mb-2">
+            <h2 className="font-serif text-3xl text-[--brand-ink] mb-4">
               Data We Access
             </h2>
-            <p>
+            <p className="text-lg">
               We request read-only access to your Gmail account and Google
               Contacts solely to identify people you have meaningfully
               communicated with.
@@ -23,10 +23,10 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-[--brand-ink] mb-2">
+            <h2 className="font-serif text-3xl text-[--brand-ink] mb-4">
               Data We Process (Not Store)
             </h2>
-            <p>
+            <p className="text-lg">
               Email thread metadata (sender names, email addresses, subject line
               snippets, and message counts) is processed in memory on our
               servers. We do not store, log, or retain any email content, subject
@@ -35,10 +35,10 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-[--brand-ink] mb-2">
+            <h2 className="font-serif text-3xl text-[--brand-ink] mb-4">
               Data We Store
             </h2>
-            <ul className="list-disc list-inside space-y-1">
+            <ul className="list-disc list-inside space-y-3 text-lg">
               <li>Your email address (to deliver your download link)</li>
               <li>Job status (pending/processing/complete)</li>
               <li>
@@ -49,10 +49,10 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-[--brand-ink] mb-2">
+            <h2 className="font-serif text-3xl text-[--brand-ink] mb-4">
               Data We Never Store
             </h2>
-            <ul className="list-disc list-inside space-y-1">
+            <ul className="list-disc list-inside space-y-3 text-lg">
               <li>Email bodies or full subject lines</li>
               <li>Email thread content</li>
               <li>Contact names or personal information from your contacts</li>
@@ -60,10 +60,10 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-[--brand-ink] mb-2">
+            <h2 className="font-serif text-3xl text-[--brand-ink] mb-4">
               Data Deletion
             </h2>
-            <p>
+            <p className="text-lg">
               All processed data is permanently deleted within 15 minutes of
               your download, or within 24 hours if no download occurs. Your
               Google access token is deleted immediately after processing
@@ -72,15 +72,15 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-[--brand-ink] mb-2">
+            <h2 className="font-serif text-3xl text-[--brand-ink] mb-4">
               Google API Services
             </h2>
-            <p>
+            <p className="text-lg">
               Our use and transfer of information received from Google APIs
               adheres to the{" "}
               <a
                 href="https://developers.google.com/terms/api-services-user-data-policy"
-                className="underline"
+                className="underline hover:text-[--brand-ink] transition-colors"
                 target="_blank"
               >
                 Google API Services User Data Policy
@@ -90,10 +90,10 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-[--brand-ink] mb-2">
+            <h2 className="font-serif text-3xl text-[--brand-ink] mb-4">
               Third Parties
             </h2>
-            <ul className="list-disc list-inside space-y-1">
+            <ul className="list-disc list-inside space-y-3 text-lg">
               <li>
                 Stripe: payment processing (their privacy policy applies)
               </li>
@@ -106,12 +106,12 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-[--brand-ink] mb-2">
+            <h2 className="font-serif text-3xl text-[--brand-ink] mb-4">
               Your Rights
             </h2>
-            <p>
+            <p className="text-lg">
               You may request deletion of your data at any time by emailing{" "}
-              <a href="mailto:privacy@whodoyouknow.xyz" className="underline">
+              <a href="mailto:privacy@whodoyouknow.xyz" className="underline hover:text-[--brand-ink] transition-colors">
                 privacy@whodoyouknow.xyz
               </a>
               .
@@ -119,11 +119,11 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-[--brand-ink] mb-2">
+            <h2 className="font-serif text-3xl text-[--brand-ink] mb-4">
               Contact
             </h2>
-            <p>
-              <a href="mailto:privacy@whodoyouknow.xyz" className="underline">
+            <p className="text-lg">
+              <a href="mailto:privacy@whodoyouknow.xyz" className="underline hover:text-[--brand-ink] transition-colors">
                 privacy@whodoyouknow.xyz
               </a>
             </p>

@@ -4,11 +4,8 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { HeroBackground } from "./HeroBackground";
 import { signIn } from "@/lib/auth-client";
-import { useState } from "react";
 
 export function Hero() {
-  const [isDark, setIsDark] = useState(false);
-
   const handleGetStarted = () => {
     signIn.social({
       provider: "google",
@@ -21,9 +18,9 @@ export function Hero() {
 
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
-      <HeroBackground onThemeChange={setIsDark} />
+      <HeroBackground />
       <div className="relative z-10 text-center max-w-5xl mx-auto px-6 pt-20">
-        <h1 className={`font-serif text-5xl sm:text-6xl md:text-7xl lg:text-[6rem] tracking-tight leading-[1.1] mb-8 transition-colors duration-700 ${isDark ? 'text-white' : 'text-[--brand-ink]'}`}>
+        <h1 className="font-serif text-5xl sm:text-6xl md:text-7xl lg:text-[6rem] tracking-tight text-[--brand-ink] leading-[1.1] mb-8">
           <span className="block">
             {text1.split("").map((char, i) => (
               <motion.span
@@ -36,7 +33,7 @@ export function Hero() {
               </motion.span>
             ))}
           </span>
-          <span className={`block mt-2 transition-colors duration-700 ${isDark ? 'text-white/70' : 'text-[--brand-muted]'}`}>
+          <span className="block mt-2 text-[--brand-muted]">
             {text2.split("").map((char, i) => (
               <motion.span
                 key={`t2-${i}`}
@@ -54,7 +51,7 @@ export function Hero() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: (text1.length + text2.length) * 0.03 + 1, duration: 0.6 }}
-          className={`text-lg md:text-xl mb-12 max-w-2xl mx-auto font-light transition-colors duration-700 ${isDark ? 'text-white/80' : 'text-[--brand-muted]'}`}
+          className="text-lg md:text-xl text-[--brand-muted] mb-12 max-w-2xl mx-auto font-light"
         >
           Connect your Gmail. We scan your history, find every real person
           you&apos;ve ever interacted with, and hand you a clean spreadsheet.
@@ -70,15 +67,11 @@ export function Hero() {
           <Button
             size="lg"
             onClick={handleGetStarted}
-            className={`text-lg px-12 py-7 rounded-full font-medium transition-all duration-300 shadow-xl ${
-              isDark 
-                ? 'bg-white text-black hover:bg-white/90' 
-                : 'bg-[--brand-ink] text-[--brand-cream] hover:bg-black/80 hover:text-[--brand-cream]'
-            }`}
+            className="bg-[--brand-ink] text-[--brand-cream] hover:bg-black/80 hover:text-[--brand-cream] text-lg px-12 py-7 rounded-full font-medium transition-all duration-300 shadow-xl"
           >
             Get My Network — $9
           </Button>
-          <p className={`text-sm transition-colors duration-700 ${isDark ? 'text-white/60' : 'text-[--brand-muted]/60'}`}>
+          <p className="text-sm text-[--brand-muted]/60">
             Local processing via Ollama available for privacy-conscious users
           </p>
         </motion.div>

@@ -58,12 +58,12 @@ export default function FilterPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[--brand-cream] py-12 px-6">
+    <main className="min-h-screen bg-[--brand-cream] py-24 px-6">
       <div className="max-w-2xl mx-auto">
-        <h1 className="font-serif text-4xl font-bold mb-2">
+        <h1 className="font-serif text-5xl md:text-6xl tracking-tight text-[--brand-ink] mb-4">
           Configure Your Scan
         </h1>
-        <p className="text-[--brand-muted] mb-8">
+        <p className="text-lg text-[--brand-muted] mb-12 font-light">
           Shape what gets scanned before you pay.
         </p>
         <FilterPanel onSubmit={handleSubmit} isSubmitting={isSubmitting} />

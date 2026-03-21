@@ -1,30 +1,30 @@
 export default function TermsPage() {
   return (
-    <main className="min-h-screen bg-[--brand-cream] py-12 px-6">
+    <main className="min-h-screen bg-[--brand-cream] py-24 px-6">
       <div className="max-w-2xl mx-auto">
-        <h1 className="font-serif text-4xl font-bold mb-2">
+        <h1 className="font-serif text-5xl md:text-6xl tracking-tight text-[--brand-ink] mb-4">
           Terms of Service
         </h1>
-        <p className="text-sm text-[--brand-muted] mb-8">
+        <p className="text-lg font-light text-[--brand-muted] mb-16">
           Last updated: January 2026
         </p>
 
-        <div className="space-y-6 text-[--brand-muted] leading-relaxed">
+        <div className="space-y-12 text-[--brand-muted] leading-relaxed">
           <section>
-            <h2 className="text-lg font-semibold text-[--brand-ink] mb-2">
+            <h2 className="font-serif text-3xl text-[--brand-ink] mb-4">
               Service
             </h2>
-            <p>
+            <p className="text-lg">
               WhoDoYouKnow provides a one-time personal contact extraction
               service. By using this service, you agree to these terms.
             </p>
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-[--brand-ink] mb-2">
+            <h2 className="font-serif text-3xl text-[--brand-ink] mb-4">
               Payment
             </h2>
-            <p>
+            <p className="text-lg">
               The service costs $9 USD, charged once via Stripe. No
               subscriptions. No refunds after processing begins. If processing
               fails, you will not be charged.
@@ -32,13 +32,13 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-[--brand-ink] mb-2">
+            <h2 className="font-serif text-3xl text-[--brand-ink] mb-4">
               Acceptable Use
             </h2>
-            <p>
+            <p className="text-lg">
               You may only process your own email account. You agree not to:
             </p>
-            <ul className="list-disc list-inside space-y-1 mt-2">
+            <ul className="list-disc list-inside space-y-3 mt-4 text-lg">
               <li>Process email accounts belonging to others without consent</li>
               <li>Commercially resale the output</li>
               <li>Use the service for scraping or data mining purposes</li>
@@ -47,10 +47,10 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-[--brand-ink] mb-2">
+            <h2 className="font-serif text-3xl text-[--brand-ink] mb-4">
               Data Handling
             </h2>
-            <p>
+            <p className="text-lg">
               We process email metadata in memory only. Email bodies are never
               accessed, stored, or sent to any external service. All data is
               deleted within 15 minutes of download. See our Privacy Policy for
@@ -59,10 +59,10 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-[--brand-ink] mb-2">
+            <h2 className="font-serif text-3xl text-[--brand-ink] mb-4">
               Warranty
             </h2>
-            <p>
+            <p className="text-lg">
               The service is provided &quot;as is&quot; without warranty. We do
               not guarantee the accuracy or completeness of the generated contact
               list.
@@ -70,10 +70,10 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-[--brand-ink] mb-2">
+            <h2 className="font-serif text-3xl text-[--brand-ink] mb-4">
               Limitation of Liability
             </h2>
-            <p>
+            <p className="text-lg">
               Our liability is limited to the amount paid for the service ($9
               USD). We are not liable for any indirect, incidental, or
               consequential damages.
@@ -81,13 +81,13 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-[--brand-ink] mb-2">
+            <h2 className="font-serif text-3xl text-[--brand-ink] mb-4">
               Contact
             </h2>
-            <p>
+            <p className="text-lg">
               <a
                 href="mailto:support@whodoyouknow.xyz"
-                className="underline"
+                className="underline hover:text-[--brand-ink] transition-colors"
               >
                 support@whodoyouknow.xyz
               </a>

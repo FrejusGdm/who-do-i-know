@@ -35,80 +35,85 @@ export function DownloadCard({
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="max-w-lg w-full mx-auto"
+      className="max-w-2xl w-full mx-auto"
     >
-      <div className="text-center mb-8">
-        <CheckCircle className="w-12 h-12 text-[--brand-ink] mx-auto mb-4" />
-        <h1 className="font-serif text-4xl font-bold mb-2">
+      <div className="text-center mb-12">
+        <div className="w-20 h-20 rounded-full bg-[--brand-ink] flex items-center justify-center mx-auto mb-8 shadow-md">
+          <CheckCircle className="w-8 h-8 text-[--brand-cream]" strokeWidth={2} />
+        </div>
+        <h1 className="font-serif text-5xl md:text-6xl tracking-tight text-[--brand-ink] mb-4">
           {contactCount} people.
         </h1>
-        <p className="text-[--brand-muted] text-lg">
+        <p className="text-xl text-[--brand-muted] font-light">
           That&apos;s your network.
         </p>
       </div>
 
       {/* Preview Table */}
-      <div className="mb-8 overflow-hidden rounded-lg border border-[--brand-muted]/20">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-[--brand-ink] text-[--brand-cream]">
-              <th className="text-left p-3">Name</th>
-              <th className="text-left p-3">Email</th>
-              <th className="text-left p-3">Type</th>
-            </tr>
-          </thead>
-          <tbody>
-            {samplePreview.map((row) => (
-              <tr
-                key={row.email}
-                className="border-t border-[--brand-muted]/10"
-              >
-                <td className="p-3">{row.name}</td>
-                <td className="p-3 text-[--brand-muted]">{row.email}</td>
-                <td className="p-3">
-                  <span className="px-2 py-0.5 rounded-full bg-[--brand-gold]/10 text-[--brand-gold] text-xs">
-                    {row.type}
-                  </span>
-                </td>
+      <div className="mb-10 overflow-x-auto rounded-3xl border border-black/5 bg-white/50 backdrop-blur-sm p-2 shadow-sm">
+        <div className="overflow-hidden rounded-2xl">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-black/5 text-[--brand-ink]">
+                <th className="text-left p-4 font-medium">Name</th>
+                <th className="text-left p-4 font-medium">Email</th>
+                <th className="text-left p-4 font-medium">Type</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="bg-white">
+              {samplePreview.map((row, i) => (
+                <tr
+                  key={row.email}
+                  className={i !== samplePreview.length - 1 ? "border-b border-black/5" : ""}
+                >
+                  <td className="p-4 font-medium text-[--brand-ink]">{row.name}</td>
+                  <td className="p-4 text-[--brand-muted]">{row.email}</td>
+                  <td className="p-4">
+                    <span className="px-3 py-1 rounded-full bg-black/5 text-[--brand-ink] text-xs font-medium">
+                      {row.type}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      <Button
-        size="lg"
-        onClick={onDownload}
-        disabled={!downloadUrl && !isLocal}
-        className="w-full bg-[--brand-ink] text-[--brand-cream] hover:bg-[--brand-gold] hover:text-[--brand-cream] text-lg py-6 font-semibold transition-all duration-300 mb-4"
-      >
-        <Download className="w-5 h-5 mr-2" />
-        Download CSV
-      </Button>
+      <div className="max-w-md mx-auto">
+        <Button
+          size="lg"
+          onClick={onDownload}
+          disabled={!downloadUrl && !isLocal}
+          className="w-full bg-[--brand-ink] text-[--brand-cream] hover:bg-black/80 text-lg py-7 rounded-full font-medium transition-all duration-300 shadow-xl mb-6"
+        >
+          <Download className="w-5 h-5 mr-3" />
+          Download CSV
+        </Button>
 
-      <div className="text-center space-y-4">
-        <div className="p-4 bg-[--brand-muted]/5 border border-[--brand-muted]/20 rounded-lg">
-          <p className="text-sm text-[--brand-ink]">
+        <div className="text-center space-y-6">
+          <p className="text-sm font-medium text-[--brand-muted] bg-white/50 backdrop-blur-sm border border-black/5 rounded-full py-2 px-4 inline-block shadow-sm">
             {isLocal
               ? "Your data never left your device."
               : `Your data has been deleted from our servers.${downloadedAt ? ` Downloaded at ${downloadedAt}.` : ""}`}
           </p>
-        </div>
 
-        <div className="pt-4 border-t border-[--brand-muted]/10">
-          <p className="text-sm text-[--brand-muted] mb-2">
-            Know someone graduating?
-          </p>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              navigator.clipboard.writeText(shareUrl);
-            }}
-          >
-            <Share2 className="w-4 h-4 mr-2" />
-            Copy Share Link
-          </Button>
+          <div className="pt-6 border-t border-black/5">
+            <p className="text-sm text-[--brand-muted] mb-3">
+              Know someone graduating?
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-full bg-white border-black/5 shadow-sm px-6"
+              onClick={() => {
+                navigator.clipboard.writeText(shareUrl);
+              }}
+            >
+              <Share2 className="w-4 h-4 mr-2" />
+              Copy Share Link
+            </Button>
+          </div>
         </div>
       </div>
     </motion.div>

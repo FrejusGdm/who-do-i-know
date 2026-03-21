@@ -58,23 +58,25 @@ export default function ConnectPage() {
           <img
             src={session.user.image}
             alt={session.user.name ?? "Profile"}
-            className="w-16 h-16 rounded-full mx-auto mb-4"
+            className="w-20 h-20 rounded-full mx-auto mb-6 shadow-sm border border-black/5"
           />
         )}
-        <h1 className="font-serif text-4xl font-bold mb-2">
+        <h1 className="font-serif text-5xl md:text-6xl tracking-tight text-[--brand-ink] mb-4">
           Connected
         </h1>
-        <p className="text-[--brand-muted] mb-8">
-          {session.user.name} — {session.user.email}
+        <p className="text-lg text-[--brand-muted] mb-12">
+          {session.user.name} &middot; {session.user.email}
         </p>
 
-        <div className="space-y-4 mb-8 text-left">
+        <div className="space-y-6 mb-12 text-left bg-white/50 backdrop-blur-sm p-8 rounded-3xl border border-black/5">
           {permissions.map((p) => (
-            <div key={p.label} className="flex items-start gap-3">
-              <p.icon className="w-5 h-5 text-[--brand-ink] mt-0.5 shrink-0" />
+            <div key={p.label} className="flex items-start gap-4">
+              <div className="w-10 h-10 rounded-full bg-[--brand-ink]/5 flex items-center justify-center shrink-0">
+                <p.icon className="w-5 h-5 text-[--brand-ink]" strokeWidth={1.5} />
+              </div>
               <div>
-                <p className="font-medium text-sm">{p.label}</p>
-                <p className="text-xs text-[--brand-muted]">{p.detail}</p>
+                <p className="font-medium text-[--brand-ink]">{p.label}</p>
+                <p className="text-sm text-[--brand-muted] mt-1 leading-relaxed">{p.detail}</p>
               </div>
             </div>
           ))}
@@ -83,7 +85,7 @@ export default function ConnectPage() {
         <Link href="/filter">
           <Button
             size="lg"
-            className="w-full bg-[--brand-ink] text-[--brand-cream] hover:bg-[--brand-gold] hover:text-[--brand-cream] font-semibold transition-all duration-300"
+            className="w-full bg-[--brand-ink] text-[--brand-cream] hover:bg-black/80 rounded-full text-lg py-7 font-medium transition-all duration-300 shadow-xl"
           >
             Configure Your Scan
           </Button>

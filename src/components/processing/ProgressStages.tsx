@@ -78,29 +78,35 @@ export function ProgressStages({
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: i * 0.1 }}
-            className={`flex items-start gap-4 p-4 rounded-lg transition-colors ${
+            className={`flex items-start gap-5 p-5 rounded-2xl transition-all duration-500 border ${
               isCurrent
-                ? "bg-[--brand-ink]/5 border border-[--brand-ink]/20"
+                ? "bg-white shadow-sm border-black/5"
                 : isComplete
-                  ? "bg-[--brand-muted]/5 border border-[--brand-muted]/20"
-                  : "opacity-40"
+                  ? "bg-white/40 border-transparent backdrop-blur-sm"
+                  : "opacity-40 border-transparent"
             }`}
           >
             <div className="mt-0.5 shrink-0">
               {isComplete && (
-                <Check className="w-5 h-5 text-[--brand-ink]" />
+                <div className="w-6 h-6 rounded-full bg-black/5 flex items-center justify-center">
+                  <Check className="w-3.5 h-3.5 text-[--brand-ink]" strokeWidth={2.5} />
+                </div>
               )}
               {isCurrent && (
-                <Loader2 className="w-5 h-5 text-[--brand-ink] animate-spin" />
+                <div className="w-6 h-6 flex items-center justify-center">
+                  <Loader2 className="w-5 h-5 text-[--brand-ink] animate-spin" />
+                </div>
               )}
               {isPending && (
-                <div className="w-5 h-5 rounded-full border-2 border-[--brand-muted]/20" />
+                <div className="w-6 h-6 rounded-full border-2 border-black/10" />
               )}
             </div>
             <div>
-              <p className="font-medium text-sm">{stage.label}</p>
+              <p className={`font-medium ${isCurrent ? 'text-[--brand-ink]' : 'text-[--brand-muted]'}`}>
+                {stage.label}
+              </p>
               {isCurrent && (
-                <p className="text-xs text-[--brand-muted] mt-1">
+                <p className="text-sm text-[--brand-muted] mt-1.5 leading-relaxed">
                   {currentCopy || stage.copies[0]}
                 </p>
               )}
@@ -110,9 +116,11 @@ export function ProgressStages({
       })}
 
       {contactCount !== undefined && contactCount > 0 && (
-        <p className="text-center text-sm text-[--brand-muted] mt-4">
-          {contactCount} contacts found so far
-        </p>
+        <div className="text-center mt-8">
+          <p className="inline-block text-sm font-medium text-[--brand-muted] bg-white/50 backdrop-blur-sm border border-black/5 rounded-full py-2 px-4 shadow-sm">
+            <span className="text-[--brand-ink]">{contactCount}</span> contacts found so far
+          </p>
+        </div>
       )}
     </div>
   );

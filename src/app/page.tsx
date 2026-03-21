@@ -1,11 +1,13 @@
 import { Hero } from "@/components/landing/Hero";
 import { TrustBadges } from "@/components/landing/TrustBadges";
 import { SampleCsv } from "@/components/landing/SampleCsv";
+import { Navbar } from "@/components/landing/Navbar";
 import Link from "next/link";
 
 export default function LandingPage() {
   return (
     <main className="min-h-screen bg-[--brand-cream]">
+      <Navbar />
       <Hero />
       <TrustBadges />
       <SampleCsv />
