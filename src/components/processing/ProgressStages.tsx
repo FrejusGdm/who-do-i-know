@@ -80,18 +80,18 @@ export function ProgressStages({
             transition={{ delay: i * 0.1 }}
             className={`flex items-start gap-4 p-4 rounded-lg transition-colors ${
               isCurrent
-                ? "bg-[--brand-gold]/10 border border-[--brand-gold]/20"
+                ? "bg-[--brand-ink]/5 border border-[--brand-ink]/20"
                 : isComplete
-                  ? "bg-green-50 border border-green-100"
+                  ? "bg-neutral-50 border border-neutral-200"
                   : "opacity-40"
             }`}
           >
             <div className="mt-0.5 shrink-0">
               {isComplete && (
-                <Check className="w-5 h-5 text-green-600" />
+                <Check className="w-5 h-5 text-[--brand-ink]" />
               )}
               {isCurrent && (
-                <Loader2 className="w-5 h-5 text-[--brand-gold] animate-spin" />
+                <Loader2 className="w-5 h-5 text-[--brand-ink] animate-spin" />
               )}
               {isPending && (
                 <div className="w-5 h-5 rounded-full border-2 border-[--brand-muted]/20" />
