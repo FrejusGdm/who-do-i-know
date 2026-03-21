@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { HeroBackground } from "./HeroBackground";
 import { signIn } from "@/lib/auth-client";
+import Image from "next/image";
 
 export function Hero() {
   const handleGetStarted = () => {
@@ -71,8 +72,18 @@ export function Hero() {
           >
             Get My Network — $9
           </Button>
-          <p className="text-sm text-[--brand-muted]/60">
-            Local processing via Ollama available for privacy-conscious users
+          <p className="text-sm text-[--brand-muted]/60 flex items-center justify-center gap-1.5">
+            Local processing via 
+            <a 
+              href="https://ollama.com" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-[--brand-muted] hover:text-[--brand-ink] transition-colors font-medium border-b border-transparent hover:border-[--brand-ink]/20 pb-[1px]"
+            >
+              <img src="https://ollama.com/public/icon-64x64.png" alt="Ollama" className="w-3.5 h-3.5 grayscale opacity-70" />
+              Ollama
+            </a>
+            available for privacy-conscious users
           </p>
         </motion.div>
       </div>

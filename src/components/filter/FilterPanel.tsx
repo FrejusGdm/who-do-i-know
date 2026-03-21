@@ -338,110 +338,163 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
       {/* LLM Provider */}
       <section className="p-8 bg-white/50 backdrop-blur-sm rounded-3xl border border-black/5">
         <h2 className="font-serif text-2xl text-[--brand-ink] mb-6">Processing Mode</h2>
-        <div className="space-y-3">
-          {(
-            [
-              {
-                mode: "cloud" as const,
-                label: "Cloud (OpenRouter)",
-                desc: "Recommended — fastest, no setup",
-              },
-              {
-                mode: "local" as const,
-                label: "Local (Ollama)",
-                desc: "Privacy-first — data never leaves your device",
-              },
-              {
-                mode: "byok" as const,
-                label: "Bring Your Own Key",
-                desc: "Use your own OpenRouter-compatible API key",
-              },
-            ] as const
-          ).map((opt) => (
-            <label
-              key={opt.mode}
-              className={`flex items-start gap-4 p-5 rounded-2xl border cursor-pointer transition-all ${
-                providerMode === opt.mode
-                  ? "border-[--brand-ink] bg-white shadow-sm"
-                  : "border-black/5 hover:border-black/10 hover:bg-white/40"
-              }`}
-            >
-              <input
-                type="radio"
-                name="provider"
-                value={opt.mode}
-                checked={providerMode === opt.mode}
-                onChange={() => setProviderMode(opt.mode)}
-                className="mt-1 border-black/10 text-[--brand-ink] focus:ring-[--brand-ink]"
-              />
-              <div>
-                <p className="font-medium text-[--brand-ink]">{opt.label}</p>
-                <p className="text-sm text-[--brand-muted] mt-1">{opt.desc}</p>
-              </div>
-            </label>
-          ))}
-        </div>
+        <div className="flex flex-col md:flex-row gap-6">
+          {/* Left Pane: Options */}
+          <div className="w-full md:w-1/3 flex flex-col gap-2">
+            {(
+              [
+                {
+                  mode: "cloud" as const,
+                  label: "Cloud (OpenRouter)",
+                  desc: "Recommended",
+                },
+                {
+                  mode: "local" as const,
+                  label: "Local (Ollama)",
+                  desc: "Privacy-first",
+                },
+                {
+                  mode: "byok" as const,
+                  label: "Bring Your Own Key",
+                  desc: "Custom OpenRouter",
+                },
+              ] as const
+            ).map((opt) => (
+              <button
+                key={opt.mode}
+                onClick={() => setProviderMode(opt.mode)}
+                className={`text-left p-4 rounded-2xl border transition-all ${
+                  providerMode === opt.mode
+                    ? "border-[--brand-ink] bg-white shadow-sm ring-1 ring-[--brand-ink]/5"
+                    : "border-transparent hover:border-black/5 hover:bg-white/40 text-[--brand-muted]"
+                }`}
+              >
+                <p className={`font-medium ${providerMode === opt.mode ? "text-[--brand-ink]" : ""}`}>{opt.label}</p>
+                <p className="text-xs opacity-80 mt-1">{opt.desc}</p>
+              </button>
+            ))}
+          </div>
 
-        {providerMode === "local" && (
-          <div className="mt-4 p-5 bg-white rounded-2xl border border-black/5 shadow-sm">
-            {ollamaStatus === "checking" && (
-              <p className="text-sm text-[--brand-muted]">
-                Checking Ollama connection...
-              </p>
-            )}
-            {ollamaStatus === "connected" && (
-              <div>
-                <p className="text-sm font-medium text-[--brand-ink] mb-3">
-                  Ollama connected
-                </p>
-                <select
-                  value={selectedOllamaModel}
-                  onChange={(e) => setSelectedOllamaModel(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-white border border-black/5 rounded-full text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[--brand-ink]/20"
+          {/* Right Pane: Details & Inputs */}
+          <div className="w-full md:w-2/3 p-6 bg-white rounded-2xl border border-black/5 shadow-sm min-h-[200px]">
+            <AnimatePresence mode="wait">
+              {providerMode === "cloud" && (
+                <motion.div
+                  key="cloud"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="h-full flex flex-col justify-center"
                 >
-                  {ollamaModels.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-            {ollamaStatus === "disconnected" && (
-              <div>
-                <p className="text-sm font-medium text-[--brand-ink] mb-2">
-                  Ollama not detected at localhost:11434
-                </p>
-                <p className="text-sm text-[--brand-muted] mb-4 leading-relaxed">
-                  Install Ollama from{" "}
-                  <a
-                    href="https://ollama.com"
-                    target="_blank"
-                    className="text-[--brand-ink] hover:underline"
-                  >
-                    ollama.com
-                  </a>
-                  , then run: <code className="bg-black/5 px-1.5 py-0.5 rounded text-xs">ollama pull llama3.1:8b</code>
-                </p>
-                <Button variant="outline" className="rounded-full bg-white border-black/5" onClick={checkOllama}>
-                  Try Again
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
+                  <div className="w-12 h-12 rounded-full bg-[--brand-ink]/5 flex items-center justify-center mb-4">
+                    <svg className="w-6 h-6 text-[--brand-ink]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+                    </svg>
+                  </div>
+                  <h3 className="font-serif text-xl text-[--brand-ink] mb-2">Fastest & Easiest</h3>
+                  <p className="text-sm text-[--brand-muted] leading-relaxed">
+                    We use OpenRouter&apos;s enterprise-grade API to process your network instantly. No setup required. Your data is never trained on and is deleted immediately after processing.
+                  </p>
+                </motion.div>
+              )}
 
-        {providerMode === "byok" && (
-          <div className="mt-4">
-            <input
-              type="password"
-              value={byokApiKey}
-              onChange={(e) => setByokApiKey(e.target.value)}
-              placeholder="Your OpenRouter API key"
-              className="w-full px-5 py-3 bg-white border border-black/5 rounded-full text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[--brand-ink]/20 transition-all"
-            />
+              {providerMode === "local" && (
+                <motion.div
+                  key="local"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="h-full flex flex-col justify-center"
+                >
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-12 h-12 rounded-full bg-[--brand-ink]/5 flex items-center justify-center">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src="https://ollama.com/public/icon-64x64.png" alt="Ollama" className="w-6 h-6 grayscale opacity-80" />
+                    </div>
+                    <div>
+                      <h3 className="font-serif text-xl text-[--brand-ink]">100% On-Device</h3>
+                      <p className="text-xs text-[--brand-muted]">Maximum privacy</p>
+                    </div>
+                  </div>
+
+                  {ollamaStatus === "checking" && (
+                    <div className="flex items-center gap-2 text-sm text-[--brand-muted]">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Checking connection to localhost:11434...
+                    </div>
+                  )}
+                  {ollamaStatus === "connected" && (
+                    <div className="space-y-3">
+                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 text-xs font-medium">
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                        Connected
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-[--brand-muted] mb-1.5">Select Model</label>
+                        <select
+                          value={selectedOllamaModel}
+                          onChange={(e) => setSelectedOllamaModel(e.target.value)}
+                          className="w-full px-4 py-2.5 bg-white border border-black/5 rounded-xl text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[--brand-ink]/20"
+                        >
+                          {ollamaModels.map((m) => (
+                            <option key={m} value={m}>
+                              {m}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  )}
+                  {ollamaStatus === "disconnected" && (
+                    <div className="bg-red-500/5 border border-red-500/10 rounded-xl p-4">
+                      <p className="text-sm font-medium text-red-800 mb-2">
+                        Could not connect to Ollama
+                      </p>
+                      <p className="text-xs text-red-600/80 mb-4 leading-relaxed">
+                        Please ensure Ollama is running locally. You can download it from{" "}
+                        <a href="https://ollama.com" target="_blank" rel="noopener noreferrer" className="underline font-medium hover:text-red-800">ollama.com</a>.
+                        After installing, run <code className="bg-red-500/10 px-1 py-0.5 rounded">ollama pull llama3.1:8b</code>.
+                      </p>
+                      <Button variant="outline" size="sm" className="rounded-full bg-white text-red-700 border-red-200 hover:bg-red-50" onClick={checkOllama}>
+                        Try Again
+                      </Button>
+                    </div>
+                  )}
+                </motion.div>
+              )}
+
+              {providerMode === "byok" && (
+                <motion.div
+                  key="byok"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="h-full flex flex-col justify-center"
+                >
+                  <div className="w-12 h-12 rounded-full bg-[--brand-ink]/5 flex items-center justify-center mb-4">
+                    <svg className="w-6 h-6 text-[--brand-ink]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                    </svg>
+                  </div>
+                  <h3 className="font-serif text-xl text-[--brand-ink] mb-2">Bring Your Own Key</h3>
+                  <p className="text-sm text-[--brand-muted] mb-4">
+                    Use your own OpenRouter-compatible API key for processing. We do not store this key.
+                  </p>
+                  <input
+                    type="password"
+                    value={byokApiKey}
+                    onChange={(e) => setByokApiKey(e.target.value)}
+                    placeholder="sk-or-v1-..."
+                    className="w-full px-5 py-3 bg-white border border-black/10 rounded-full text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[--brand-ink]/20 transition-all"
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
-        )}
+        </div>
       </section>
 
       {/* Estimate & Submit */}
