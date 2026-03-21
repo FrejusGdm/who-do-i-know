@@ -28,52 +28,55 @@ const sampleData = [
 
 export function SampleCsv() {
   return (
-    <section className="py-20 px-6 bg-white/50">
-      <div className="max-w-4xl mx-auto">
-        <motion.h2
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          viewport={{ once: true }}
-          className="font-serif text-3xl md:text-4xl font-bold text-center mb-12"
-        >
-          Here&apos;s what you get
-        </motion.h2>
+    <section className="py-24 px-6 bg-[--brand-cream]">
+      <div className="max-w-5xl mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="overflow-x-auto rounded-lg border border-[--brand-muted]/20"
+          className="text-center mb-16"
         >
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-[--brand-ink] text-[--brand-cream]">
-                <th className="text-left p-3">Name</th>
-                <th className="text-left p-3">Email</th>
-                <th className="text-left p-3">Type</th>
-                <th className="text-left p-3">Summary</th>
-                <th className="text-left p-3">Emails</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sampleData.map((row) => (
-                <tr key={row.email} className="border-t border-[--brand-muted]/10">
-                  <td className="p-3 font-medium">{row.name}</td>
-                  <td className="p-3 text-[--brand-muted]">{row.email}</td>
-                  <td className="p-3">
-                    <span className="px-2 py-1 rounded-full bg-[--brand-ink]/10 text-[--brand-ink] text-xs font-medium">
-                      {row.type}
-                    </span>
-                  </td>
-                  <td className="p-3 text-[--brand-muted]">{row.summary}</td>
-                  <td className="p-3 text-center">{row.emails}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <h2 className="font-serif text-4xl md:text-5xl tracking-tight text-[--brand-ink] mb-4">
+            Here&apos;s what you get
+          </h2>
+          <p className="text-lg text-[--brand-muted]">A clean, actionable spreadsheet of your entire network.</p>
         </motion.div>
-        <p className="text-center text-[--brand-muted] text-sm mt-4">
-          Sample data — your real CSV will have full details for every contact
-        </p>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.2 }}
+          className="overflow-x-auto rounded-3xl border border-black/5 bg-white/50 backdrop-blur-sm p-2 shadow-sm"
+        >
+          <div className="overflow-hidden rounded-2xl">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-black/5 text-[--brand-ink]">
+                  <th className="text-left p-4 font-medium">Name</th>
+                  <th className="text-left p-4 font-medium">Email</th>
+                  <th className="text-left p-4 font-medium">Type</th>
+                  <th className="text-left p-4 font-medium">Summary</th>
+                  <th className="text-left p-4 font-medium">Emails</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white">
+                {sampleData.map((row, i) => (
+                  <tr key={row.email} className={i !== sampleData.length - 1 ? "border-b border-black/5" : ""}>
+                    <td className="p-4 font-medium text-[--brand-ink]">{row.name}</td>
+                    <td className="p-4 text-[--brand-muted]">{row.email}</td>
+                    <td className="p-4">
+                      <span className="px-3 py-1 rounded-full bg-black/5 text-[--brand-ink] text-xs font-medium">
+                        {row.type}
+                      </span>
+                    </td>
+                    <td className="p-4 text-[--brand-muted]">{row.summary}</td>
+                    <td className="p-4 text-center text-[--brand-muted]">{row.emails}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </motion.div>
       </div>
     </section>
   );

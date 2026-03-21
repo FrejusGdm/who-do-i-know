@@ -1,25 +1,11 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { gsap } from "gsap";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { HeroBackground } from "./HeroBackground";
 import { signIn } from "@/lib/auth-client";
 
 export function Hero() {
-  const headingRef = useRef<HTMLHeadingElement>(null);
-
-  useEffect(() => {
-    if (!headingRef.current) return;
-    const words = headingRef.current.querySelectorAll(".word");
-    gsap.fromTo(
-      words,
-      { y: 60, opacity: 0 },
-      { y: 0, opacity: 1, stagger: 0.08, duration: 0.9, ease: "power3.out" }
-    );
-  }, []);
-
   const handleGetStarted = () => {
     signIn.social({
       provider: "google",
@@ -27,30 +13,45 @@ export function Hero() {
     });
   };
 
+  const text1 = "You spent years meeting people.";
+  const text2 = "Don't lose them.";
+
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
       <HeroBackground />
-      <div className="relative z-10 text-center max-w-4xl mx-auto px-6">
-        <h1
-          ref={headingRef}
-          className="font-serif text-5xl sm:text-6xl md:text-8xl font-black tracking-tight text-[--brand-ink] leading-none mb-8"
-        >
-          {"You spent years meeting people.".split(" ").map((w, i) => (
-            <span key={i} className="word inline-block mr-3 md:mr-4">
-              {w}
-            </span>
-          ))}
-          <br />
-          <span className="word inline-block border-b-4 border-[--brand-ink] pb-1">
-            Don&apos;t lose them.
+      <div className="relative z-10 text-center max-w-5xl mx-auto px-6 pt-20">
+        <h1 className="font-serif text-5xl sm:text-6xl md:text-7xl lg:text-[6rem] tracking-tight text-[--brand-ink] leading-[1.1] mb-8">
+          <span className="block">
+            {text1.split("").map((char, i) => (
+              <motion.span
+                key={`t1-${i}`}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.03, delay: i * 0.03 }}
+              >
+                {char}
+              </motion.span>
+            ))}
+          </span>
+          <span className="block mt-2 text-[--brand-muted]">
+            {text2.split("").map((char, i) => (
+              <motion.span
+                key={`t2-${i}`}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.03, delay: (text1.length * 0.03) + (i * 0.03) + 0.5 }}
+              >
+                {char}
+              </motion.span>
+            ))}
           </span>
         </h1>
 
         <motion.p
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.8, duration: 0.6 }}
-          className="text-lg md:text-xl text-[--brand-muted] mb-12 max-w-2xl mx-auto"
+          transition={{ delay: (text1.length + text2.length) * 0.03 + 1, duration: 0.6 }}
+          className="text-lg md:text-xl text-[--brand-muted] mb-12 max-w-2xl mx-auto font-light"
         >
           Connect your Gmail. We scan your history, find every real person
           you&apos;ve ever interacted with, and hand you a clean spreadsheet.
@@ -60,25 +61,20 @@ export function Hero() {
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 1.1 }}
+          transition={{ delay: (text1.length + text2.length) * 0.03 + 1.2, duration: 0.4 }}
+          className="flex flex-col items-center gap-4"
         >
           <Button
             size="lg"
             onClick={handleGetStarted}
-            className="bg-[--brand-ink] text-[--brand-cream] hover:bg-[--brand-gold] hover:text-[--brand-cream] text-lg px-10 py-6 font-semibold transition-all duration-300"
+            className="bg-[--brand-ink] text-[--brand-cream] hover:bg-black/80 hover:text-[--brand-cream] text-lg px-12 py-7 rounded-full font-medium transition-all duration-300 shadow-xl"
           >
             Get My Network — $9
           </Button>
+          <p className="text-sm text-[--brand-muted]/60">
+            Local processing via Ollama available for privacy-conscious users
+          </p>
         </motion.div>
-
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1.5 }}
-          className="mt-6 text-sm text-[--brand-muted]/60"
-        >
-          Local processing via Ollama available for privacy-conscious users
-        </motion.p>
       </div>
     </section>
   );

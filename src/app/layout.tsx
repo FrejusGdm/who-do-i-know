@@ -1,15 +1,15 @@
 import type { Metadata, Viewport } from "next";
-import { Playfair_Display, Inter } from "next/font/google";
+import { Instrument_Serif, Outfit } from "next/font/google";
 import { cn } from "@/lib/utils";
 import "./globals.css";
 
-const playfair = Playfair_Display({
+const instrumentSerif = Instrument_Serif({
   subsets: ["latin"],
   variable: "--font-serif",
-  weight: ["400", "700", "900"],
+  weight: ["400"],
 });
 
-const inter = Inter({
+const outfit = Outfit({
   subsets: ["latin"],
   variable: "--font-sans",
 });
@@ -52,8 +52,8 @@ export default function RootLayout({
     <html lang="en">
       <body
         className={cn(
-          playfair.variable,
-          inter.variable,
+          instrumentSerif.variable,
+          outfit.variable,
           "font-sans antialiased bg-[--brand-cream] text-[--brand-ink]"
         )}
       >

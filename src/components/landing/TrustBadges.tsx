@@ -23,8 +23,8 @@ const badges = [
 
 export function TrustBadges() {
   return (
-    <section className="py-20 px-6">
-      <div className="max-w-4xl mx-auto grid md:grid-cols-3 gap-8">
+    <section className="py-24 px-6 bg-[--brand-cream]">
+      <div className="max-w-5xl mx-auto grid md:grid-cols-3 gap-6">
         {badges.map((badge, i) => (
           <motion.div
             key={badge.title}
@@ -32,11 +32,13 @@ export function TrustBadges() {
             whileInView={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.1, duration: 0.5 }}
             viewport={{ once: true }}
-            className="text-center"
+            className="p-8 rounded-3xl border border-black/5 bg-white/50 backdrop-blur-sm"
           >
-            <badge.icon className="w-8 h-8 mx-auto mb-4 text-[--brand-ink]" />
-            <h3 className="font-semibold text-lg mb-2">{badge.title}</h3>
-            <p className="text-[--brand-muted] text-sm">{badge.description}</p>
+            <div className="w-12 h-12 rounded-full bg-[--brand-ink] flex items-center justify-center mb-6">
+              <badge.icon className="w-5 h-5 text-[--brand-cream]" strokeWidth={1.5} />
+            </div>
+            <h3 className="font-serif text-2xl mb-3 text-[--brand-ink]">{badge.title}</h3>
+            <p className="text-[--brand-muted] leading-relaxed">{badge.description}</p>
           </motion.div>
         ))}
       </div>
