@@ -4,30 +4,30 @@
 
 @layer base {
   :root {
-    --brand-cream: #FAF7F2;
-    --brand-ink: #1A1714;
-    --brand-gold: #C9A84C;
-    --brand-muted: #8C7B6B;
+    --brand-cream: #F8F8F8;
+    --brand-ink: #0A0A0A;
+    --brand-gold: #0A0A0A;
+    --brand-muted: #737373;
 
-    --background: 0 0% 100%;
-    --foreground: 20 12% 9%;
+    --background: 0 0% 97%;
+    --foreground: 0 0% 4%;
     --card: 0 0% 100%;
-    --card-foreground: 20 12% 9%;
+    --card-foreground: 0 0% 4%;
     --popover: 0 0% 100%;
-    --popover-foreground: 20 12% 9%;
-    --primary: 20 12% 9%;
-    --primary-foreground: 40 33% 96%;
-    --secondary: 30 11% 96%;
-    --secondary-foreground: 20 12% 9%;
-    --muted: 30 11% 96%;
-    --muted-foreground: 25 10% 48%;
-    --accent: 30 11% 96%;
-    --accent-foreground: 20 12% 9%;
+    --popover-foreground: 0 0% 4%;
+    --primary: 0 0% 4%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 4%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 45%;
+    --accent: 0 0% 96%;
+    --accent-foreground: 0 0% 4%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-    --border: 30 10% 90%;
-    --input: 30 10% 90%;
-    --ring: 43 50% 54%;
+    --border: 0 0% 88%;
+    --input: 0 0% 88%;
+    --ring: 0 0% 10%;
     --radius: 0.625rem;
   }
 

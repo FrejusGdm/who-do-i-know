@@ -348,7 +348,7 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
             (providerMode === "local" && ollamaStatus !== "connected") ||
             (providerMode === "byok" && !byokApiKey)
           }
-          className="w-full bg-[--brand-ink] text-[--brand-cream] hover:bg-[--brand-gold] hover:text-[--brand-ink] text-lg py-6 font-semibold transition-all duration-300"
+          className="w-full bg-[--brand-ink] text-white border border-[--brand-ink] hover:bg-white hover:text-[--brand-ink] text-lg py-6 font-semibold transition-all duration-300"
         >
           {isSubmitting ? "Creating checkout..." : "Continue to Payment — $9"}
         </Button>
