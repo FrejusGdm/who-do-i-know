@@ -60,7 +60,7 @@ export function SampleCsv() {
                   <td className="p-3 font-medium">{row.name}</td>
                   <td className="p-3 text-[--brand-muted]">{row.email}</td>
                   <td className="p-3">
-                    <span className="px-2 py-1 rounded-full bg-[--brand-gold]/10 text-[--brand-gold] text-xs font-medium">
+                    <span className="px-2 py-1 rounded-full bg-[--brand-ink]/10 text-[--brand-ink] text-xs font-medium">
                       {row.type}
                     </span>
                   </td>

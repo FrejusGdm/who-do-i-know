@@ -70,7 +70,7 @@ export default function DownloadPage() {
     return (
       <main className="min-h-screen flex items-center justify-center bg-[--brand-cream] px-6">
         <div className="max-w-md text-center">
-          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <AlertCircle className="w-12 h-12 text-[--brand-ink] mx-auto mb-4" />
           <h1 className="font-serif text-2xl font-bold mb-2">
             Download Unavailable
           </h1>

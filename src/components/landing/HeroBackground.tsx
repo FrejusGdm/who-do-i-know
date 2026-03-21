@@ -3,8 +3,9 @@
 export function HeroBackground() {
   return (
     <div className="absolute inset-0 z-0">
-      <div className="w-full h-full bg-gradient-to-b from-[--brand-cream] via-[--brand-gold]/5 to-[--brand-cream]" />
-      <div className="absolute inset-0 bg-gradient-to-b from-[--brand-cream] via-transparent to-[--brand-cream]" />
+      <div className="w-full h-full bg-[--brand-cream]" />
+      <div className="absolute inset-0 bg-[url('/hero-ink-grid.svg')] bg-cover bg-center opacity-60" />
+      <div className="absolute inset-0 bg-gradient-to-b from-white/70 via-white/85 to-white" />
     </div>
   );
 }

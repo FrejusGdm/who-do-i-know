@@ -71,7 +71,7 @@ export default function ConnectPage() {
         <div className="space-y-4 mb-8 text-left">
           {permissions.map((p) => (
             <div key={p.label} className="flex items-start gap-3">
-              <p.icon className="w-5 h-5 text-[--brand-gold] mt-0.5 shrink-0" />
+              <p.icon className="w-5 h-5 text-[--brand-ink] mt-0.5 shrink-0" />
               <div>
                 <p className="font-medium text-sm">{p.label}</p>
                 <p className="text-xs text-[--brand-muted]">{p.detail}</p>
@@ -83,7 +83,7 @@ export default function ConnectPage() {
         <Link href="/filter">
           <Button
             size="lg"
-            className="w-full bg-[--brand-ink] text-[--brand-cream] hover:bg-[--brand-gold] hover:text-[--brand-ink] font-semibold transition-all duration-300"
+            className="w-full bg-[--brand-ink] text-[--brand-cream] hover:bg-[--brand-gold] hover:text-[--brand-cream] font-semibold transition-all duration-300"
           >
             Configure Your Scan
           </Button>

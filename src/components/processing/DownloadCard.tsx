@@ -38,7 +38,7 @@ export function DownloadCard({
       className="max-w-lg w-full mx-auto"
     >
       <div className="text-center mb-8">
-        <CheckCircle className="w-12 h-12 text-green-600 mx-auto mb-4" />
+        <CheckCircle className="w-12 h-12 text-[--brand-ink] mx-auto mb-4" />
         <h1 className="font-serif text-4xl font-bold mb-2">
           {contactCount} people.
         </h1>
@@ -80,15 +80,15 @@ export function DownloadCard({
         size="lg"
         onClick={onDownload}
         disabled={!downloadUrl && !isLocal}
-        className="w-full bg-[--brand-ink] text-[--brand-cream] hover:bg-[--brand-gold] hover:text-[--brand-ink] text-lg py-6 font-semibold transition-all duration-300 mb-4"
+        className="w-full bg-[--brand-ink] text-[--brand-cream] hover:bg-[--brand-gold] hover:text-[--brand-cream] text-lg py-6 font-semibold transition-all duration-300 mb-4"
       >
         <Download className="w-5 h-5 mr-2" />
         Download CSV
       </Button>
 
       <div className="text-center space-y-4">
-        <div className="p-4 bg-green-50 border border-green-100 rounded-lg">
-          <p className="text-sm text-green-700">
+        <div className="p-4 bg-[--brand-muted]/5 border border-[--brand-muted]/20 rounded-lg">
+          <p className="text-sm text-[--brand-ink]">
             {isLocal
               ? "Your data never left your device."
               : `Your data has been deleted from our servers.${downloadedAt ? ` Downloaded at ${downloadedAt}.` : ""}`}

@@ -118,9 +118,9 @@ export function ProcessingContent() {
         </p>
 
         {error ? (
-          <div className="p-6 bg-red-50 border border-red-200 rounded-lg text-center">
-            <AlertCircle className="w-8 h-8 text-red-500 mx-auto mb-3" />
-            <p className="text-sm text-red-700 mb-4">{error}</p>
+          <div className="p-6 bg-[--brand-muted]/5 border border-[--brand-muted]/20 rounded-lg text-center">
+            <AlertCircle className="w-8 h-8 text-[--brand-ink] mx-auto mb-3" />
+            <p className="text-sm text-[--brand-ink] mb-4">{error}</p>
             <p className="text-xs text-[--brand-muted]">
               Need help? Contact support@whodoyouknow.xyz
             </p>
