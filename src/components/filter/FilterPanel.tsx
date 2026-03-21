@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { X } from "lucide-react";
+import { X, Check } from "lucide-react";
 import type { FilterConfig, LLMProviderMode } from "@/types";
 
 const DEFAULT_BLOCKED_DOMAINS = [
@@ -251,7 +251,7 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
               key={opt.mode}
               className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
                 providerMode === opt.mode
-                  ? "border-[--brand-gold] bg-[--brand-gold]/5"
+                  ? "border-[--brand-ink] bg-[--brand-ink]/5"
                   : "border-[--brand-muted]/20 hover:border-[--brand-muted]/40"
               }`}
             >
@@ -280,8 +280,9 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
             )}
             {ollamaStatus === "connected" && (
               <div>
-                <p className="text-sm text-green-600 mb-2">
-                  ✓ Ollama connected
+                <p className="text-sm text-[--brand-ink] mb-2 flex items-center gap-1.5">
+                  <Check className="w-4 h-4" />
+                  Ollama connected
                 </p>
                 <select
                   value={selectedOllamaModel}
@@ -348,7 +349,7 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
             (providerMode === "local" && ollamaStatus !== "connected") ||
             (providerMode === "byok" && !byokApiKey)
           }
-          className="w-full bg-[--brand-ink] text-[--brand-cream] hover:bg-[--brand-gold] hover:text-[--brand-ink] text-lg py-6 font-semibold transition-all duration-300"
+          className="w-full bg-[--brand-ink] text-white hover:bg-white hover:text-[--brand-ink] border-2 border-[--brand-ink] text-lg py-6 font-semibold transition-all duration-300"
         >
           {isSubmitting ? "Creating checkout..." : "Continue to Payment — $9"}
         </Button>

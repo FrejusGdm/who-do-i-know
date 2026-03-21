@@ -65,7 +65,7 @@ export function Hero() {
           <Button
             size="lg"
             onClick={handleGetStarted}
-            className="bg-[--brand-ink] text-[--brand-cream] hover:bg-[--brand-gold] hover:text-[--brand-ink] text-lg px-10 py-6 font-semibold transition-all duration-300"
+            className="bg-[--brand-ink] text-white hover:bg-white hover:text-[--brand-ink] border-2 border-[--brand-ink] text-lg px-10 py-6 font-semibold transition-all duration-300"
           >
             Get My Network — $9
           </Button>

@@ -34,7 +34,7 @@ export function TrustBadges() {
             viewport={{ once: true }}
             className="text-center"
           >
-            <badge.icon className="w-8 h-8 mx-auto mb-4 text-[--brand-gold]" />
+            <badge.icon className="w-8 h-8 mx-auto mb-4 text-[--brand-ink]" />
             <h3 className="font-semibold text-lg mb-2">{badge.title}</h3>
             <p className="text-[--brand-muted] text-sm">{badge.description}</p>
           </motion.div>

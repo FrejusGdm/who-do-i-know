@@ -38,7 +38,7 @@ export function DownloadCard({
       className="max-w-lg w-full mx-auto"
     >
       <div className="text-center mb-8">
-        <CheckCircle className="w-12 h-12 text-green-600 mx-auto mb-4" />
+        <CheckCircle className="w-12 h-12 text-[--brand-ink] mx-auto mb-4" />
         <h1 className="font-serif text-4xl font-bold mb-2">
           {contactCount} people.
         </h1>
@@ -66,7 +66,7 @@ export function DownloadCard({
                 <td className="p-3">{row.name}</td>
                 <td className="p-3 text-[--brand-muted]">{row.email}</td>
                 <td className="p-3">
-                  <span className="px-2 py-0.5 rounded-full bg-[--brand-gold]/10 text-[--brand-gold] text-xs">
+                  <span className="px-2 py-0.5 rounded-full bg-[--brand-ink]/5 text-[--brand-ink] text-xs">
                     {row.type}
                   </span>
                 </td>
@@ -80,15 +80,15 @@ export function DownloadCard({
         size="lg"
         onClick={onDownload}
         disabled={!downloadUrl && !isLocal}
-        className="w-full bg-[--brand-ink] text-[--brand-cream] hover:bg-[--brand-gold] hover:text-[--brand-ink] text-lg py-6 font-semibold transition-all duration-300 mb-4"
+        className="w-full bg-[--brand-ink] text-white hover:bg-white hover:text-[--brand-ink] border-2 border-[--brand-ink] text-lg py-6 font-semibold transition-all duration-300 mb-4"
       >
         <Download className="w-5 h-5 mr-2" />
         Download CSV
       </Button>
 
       <div className="text-center space-y-4">
-        <div className="p-4 bg-green-50 border border-green-100 rounded-lg">
-          <p className="text-sm text-green-700">
+        <div className="p-4 bg-neutral-50 border border-neutral-200 rounded-lg">
+          <p className="text-sm text-[--brand-ink]">
             {isLocal
               ? "Your data never left your device."
               : `Your data has been deleted from our servers.${downloadedAt ? ` Downloaded at ${downloadedAt}.` : ""}`}
