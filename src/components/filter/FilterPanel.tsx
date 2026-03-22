@@ -63,7 +63,7 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
   );
   const [teaseState, setTeaseState] = useState<"idle" | "scanning" | "teased">("idle");
   const [currentStep, setCurrentStep] = useState<1 | 2>(1);
-  const debounceRef = useRef<NodeJS.Timeout>();
+  const debounceRef = useRef<NodeJS.Timeout>(undefined);
 
   const getFilterConfig = useCallback((): FilterConfig => ({
     afterDate,
@@ -402,17 +402,19 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
                   mode: "cloud" as const,
                   label: "Cloud (Coming Soon)",
                   desc: "Temporarily unavailable",
-                  disabled: true,
+                  disabled: true as boolean,
                 },
                 {
                   mode: "local" as const,
                   label: "Local (Ollama)",
                   desc: "Privacy-first",
+                  disabled: false as boolean,
                 },
                 {
                   mode: "byok" as const,
                   label: "Bring Your Own Key",
                   desc: "Custom OpenRouter",
+                  disabled: false as boolean,
                 },
               ] as const
             ).map((opt) => (
