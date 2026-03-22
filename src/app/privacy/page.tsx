@@ -27,10 +27,11 @@ export default function PrivacyPage() {
               Data We Process (Not Store)
             </h2>
             <p className="text-lg">
-              Email thread metadata (sender names, email addresses, subject line
-              snippets, and message counts) is processed in memory on our
-              servers. We do not store, log, or retain any email content, subject
-              lines, or contact information beyond what is described below.
+              Email metadata (sender names, email addresses, subject lines,
+              message counts) and message content are processed in memory on
+              our servers to understand your relationships. Nothing is stored,
+              logged, or retained beyond what is described below. All data is
+              deleted immediately after your CSV is generated.
             </p>
           </section>
 
@@ -53,9 +54,13 @@ export default function PrivacyPage() {
               Data We Never Store
             </h2>
             <ul className="list-disc list-inside space-y-3 text-lg">
-              <li>Email bodies or full subject lines</li>
-              <li>Email thread content</li>
-              <li>Contact names or personal information from your contacts</li>
+              <li>
+                Email content is processed in memory but never written to disk,
+                logged, or persisted in any database
+              </li>
+              <li>
+                Contact names or personal information from your contacts
+              </li>
             </ul>
           </section>
 
@@ -95,11 +100,10 @@ export default function PrivacyPage() {
             </h2>
             <ul className="list-disc list-inside space-y-3 text-lg">
               <li>
-                Stripe: payment processing (their privacy policy applies)
-              </li>
-              <li>
-                OpenRouter: LLM inference on contact metadata (no PII sent —
-                only email addresses and subject snippets)
+                OpenRouter: Routes AI inference to models from OpenAI and
+                Anthropic. These providers have stated that API data is not
+                used for model training. We are not responsible for changes
+                to their policies — please review their terms directly.
               </li>
               <li>Vercel: hosting and temporary file storage</li>
             </ul>

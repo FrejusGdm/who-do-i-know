@@ -11,8 +11,16 @@ Ship small, correct changes without introducing new patterns unless needed.
 ## Project shape
 
 - One Next.js 14 app (frontend + backend together)
-- Auth: BetterAuth (`src/lib/auth.ts`)
-- DB: Drizzle (`src/db/schema.ts`)
+- Auth: BetterAuth — self-hosted, no external API key
+  - Server: `src/lib/auth.ts` (pass `schema` to Drizzle adapter)
+  - Client: `src/lib/auth-client.ts`
+  - Auth tables in `src/db/schema.ts`: user, session, account, verification
+  - Google OAuth access token lives in the `account` table, NOT in `session.token`
+- DB: Drizzle + Neon Postgres (`src/db/schema.ts`)
+- LLM: 3 modes — cloud (OpenRouter), local (Ollama at localhost:11434/v1), byok
+  - All use the OpenAI SDK with different `baseURL`
+  - Client creation: `src/lib/openrouter.ts` → `createClient(mode)`
+  - Model name flows: FilterPanel → filter page → /api/job → /api/process → pipeline → extractContacts
 - Processing pipeline: `src/lib/pipeline.ts`
 
 ## Rules for edits

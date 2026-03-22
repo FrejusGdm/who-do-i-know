@@ -32,17 +32,20 @@ export default function ConnectPage() {
     {
       icon: Mail,
       label: "Read-only Gmail access",
-      detail: "We read email metadata only — never full content",
-    },
-    {
-      icon: Users,
-      label: "Read-only Contacts",
-      detail: "Used to improve name resolution accuracy",
+      detail:
+        "We scan your emails to understand your relationships — then delete everything.",
     },
     {
       icon: Shield,
+      label: "Processed, never saved",
+      detail:
+        "Your data passes through AI once and is permanently deleted. Nothing is stored or used for training.",
+    },
+    {
+      icon: Users,
       label: "No modifications",
-      detail: "We will never send emails or modify your account",
+      detail:
+        "We can\u2019t send emails, delete messages, or change anything.",
     },
   ];
 

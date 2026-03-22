@@ -6,7 +6,7 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { X, Loader2, Lock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import type { FilterConfig, LLMProviderMode } from "@/types";
+import type { FilterConfig, LLMProviderMode, BYOKProvider } from "@/types";
 
 const DEFAULT_BLOCKED_DOMAINS = [
   "canvas.instructure.com",
@@ -16,11 +16,19 @@ const DEFAULT_BLOCKED_DOMAINS = [
   "facebookmail.com",
 ];
 
+const BYOK_PROVIDERS: { id: BYOKProvider; name: string; desc: string; placeholder: string }[] = [
+  { id: "openai", name: "OpenAI", desc: "GPT-4o Mini", placeholder: "sk-..." },
+  { id: "gemini", name: "Google Gemini", desc: "Gemini 2.0 Flash", placeholder: "AIza..." },
+  { id: "openrouter", name: "OpenRouter", desc: "Claude, GPT, Llama & more", placeholder: "sk-or-v1-..." },
+];
+
 interface FilterPanelProps {
   onSubmit: (
     config: FilterConfig,
     providerMode: LLMProviderMode,
-    byokApiKey?: string
+    byokApiKey?: string,
+    ollamaModel?: string,
+    byokProvider?: BYOKProvider
   ) => void;
   isSubmitting: boolean;
 }
@@ -42,8 +50,9 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
   const [skipForums, setSkipForums] = useState(true);
   const [minInteractions, setMinInteractions] = useState(2);
   const [maxThreads] = useState(500);
-  const [providerMode, setProviderMode] = useState<LLMProviderMode>("cloud");
+  const [providerMode, setProviderMode] = useState<LLMProviderMode>("local");
   const [byokApiKey, setByokApiKey] = useState("");
+  const [byokProvider, setByokProvider] = useState<BYOKProvider>("openai");
   const [ollamaStatus, setOllamaStatus] = useState<
     "checking" | "connected" | "disconnected"
   >("disconnected");
@@ -53,6 +62,7 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
     null
   );
   const [teaseState, setTeaseState] = useState<"idle" | "scanning" | "teased">("idle");
+  const [currentStep, setCurrentStep] = useState<1 | 2>(1);
   const debounceRef = useRef<NodeJS.Timeout>();
 
   const getFilterConfig = useCallback((): FilterConfig => ({
@@ -134,7 +144,13 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
   };
 
   const handleFinalSubmit = () => {
-    onSubmit(getFilterConfig(), providerMode, byokApiKey || undefined);
+    onSubmit(
+      getFilterConfig(),
+      providerMode,
+      byokApiKey || undefined,
+      selectedOllamaModel || undefined,
+      providerMode === "byok" ? byokProvider : undefined
+    );
   };
 
   if (teaseState === "scanning") {
@@ -173,7 +189,7 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
             {estimatedContacts ? `~${estimatedContacts}` : "Hundreds of"} People Found.
           </h2>
           <p className="text-xl text-[--brand-muted] font-light">
-            We've identified your real network. Unlock the full CSV to see everyone.
+            We&apos;ve identified your real network. Unlock the full CSV to see everyone.
           </p>
         </div>
 
@@ -215,7 +231,7 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
             disabled={isSubmitting}
             className="w-full bg-[--brand-ink] text-[--brand-cream] hover:bg-black/80 text-lg py-7 rounded-full font-medium transition-all duration-300 shadow-xl"
           >
-            {isSubmitting ? "Creating checkout..." : "Pay $9 to Unlock Full CSV"}
+            {isSubmitting ? "Processing..." : "Unlock Full CSV"}
           </Button>
           <button 
             onClick={() => setTeaseState("idle")}
@@ -230,13 +246,24 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
 
   return (
     <>
-      <h1 className="font-serif text-5xl md:text-6xl tracking-tight text-[--brand-ink] mb-4">
-        Configure Your Scan
-      </h1>
-      <p className="text-lg text-[--brand-muted] mb-12 font-light">
-        Shape what gets scanned before you pay.
-      </p>
-      <div className="space-y-6">
+      <div className="flex flex-col items-center mb-12 text-center">
+        <h1 className="font-serif text-5xl md:text-6xl tracking-tight text-[--brand-ink] mb-4">
+          {currentStep === 1 ? "Configure Your Scan" : "Processing Mode"}
+        </h1>
+        <p className="text-lg text-[--brand-muted] font-light">
+          {currentStep === 1 ? "Shape what gets scanned before you start." : "How should we process this?"}
+        </p>
+      </div>
+
+      <AnimatePresence mode="wait">
+        {currentStep === 1 && (
+          <motion.div
+            key="step1"
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className="space-y-6"
+          >
       {/* Date Range */}
       <section className="p-8 bg-white/50 backdrop-blur-sm rounded-3xl border border-black/5">
         <h2 className="font-serif text-2xl text-[--brand-ink] mb-2">Date Range</h2>
@@ -335,6 +362,34 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
         </div>
       </section>
 
+      <div className="pt-8 text-center">
+        {estimatedContacts !== null && (
+          <p className="text-sm font-medium text-[--brand-muted] mb-4 bg-white/50 backdrop-blur-sm border border-black/5 rounded-full py-2 px-4 inline-block">
+            ~{estimatedContacts} threads estimated <span className="font-normal opacity-70">(actual contacts may vary)</span>
+          </p>
+        )}
+        <Button
+          size="lg"
+          onClick={() => {
+            window.scrollTo({ top: 0, behavior: "smooth" });
+            setCurrentStep(2);
+          }}
+          className="w-full bg-[--brand-ink] text-[--brand-cream] hover:bg-black/80 text-lg py-7 rounded-full font-medium transition-all duration-300 shadow-xl"
+        >
+          Next: Choose Processing Mode
+        </Button>
+      </div>
+      </motion.div>
+      )}
+
+      {currentStep === 2 && (
+      <motion.div
+        key="step2"
+        initial={{ opacity: 0, x: 20 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: -20 }}
+        className="space-y-6"
+      >
       {/* LLM Provider */}
       <section className="p-8 bg-white/50 backdrop-blur-sm rounded-3xl border border-black/5">
         <h2 className="font-serif text-2xl text-[--brand-ink] mb-6">Processing Mode</h2>
@@ -345,8 +400,9 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
               [
                 {
                   mode: "cloud" as const,
-                  label: "Cloud (OpenRouter)",
-                  desc: "Recommended",
+                  label: "Cloud (Coming Soon)",
+                  desc: "Temporarily unavailable",
+                  disabled: true,
                 },
                 {
                   mode: "local" as const,
@@ -362,10 +418,13 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
             ).map((opt) => (
               <button
                 key={opt.mode}
-                onClick={() => setProviderMode(opt.mode)}
+                onClick={() => !opt.disabled && setProviderMode(opt.mode)}
+                disabled={opt.disabled}
                 className={`text-left p-4 rounded-2xl border transition-all ${
                   providerMode === opt.mode
                     ? "border-[--brand-ink] bg-white shadow-sm ring-1 ring-[--brand-ink]/5"
+                    : opt.disabled
+                    ? "border-transparent opacity-50 cursor-not-allowed text-[--brand-muted]"
                     : "border-transparent hover:border-black/5 hover:bg-white/40 text-[--brand-muted]"
                 }`}
               >
@@ -474,20 +533,35 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
                   transition={{ duration: 0.2 }}
                   className="h-full flex flex-col justify-center"
                 >
-                  <div className="w-12 h-12 rounded-full bg-[--brand-ink]/5 flex items-center justify-center mb-4">
-                    <svg className="w-6 h-6 text-[--brand-ink]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                    </svg>
-                  </div>
-                  <h3 className="font-serif text-xl text-[--brand-ink] mb-2">Bring Your Own Key</h3>
+                  <h3 className="font-serif text-xl text-[--brand-ink] mb-1">Bring Your Own Key</h3>
                   <p className="text-sm text-[--brand-muted] mb-4">
-                    Use your own OpenRouter-compatible API key for processing. We do not store this key.
+                    Use your own API key. We never store it.
                   </p>
+
+                  <div className="flex gap-2 mb-4">
+                    {BYOK_PROVIDERS.map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => { setByokProvider(p.id); setByokApiKey(""); }}
+                        className={`flex-1 text-left p-3 rounded-xl border transition-all ${
+                          byokProvider === p.id
+                            ? "border-[--brand-ink] bg-[--brand-ink]/5 ring-1 ring-[--brand-ink]/10"
+                            : "border-black/5 hover:border-black/10 hover:bg-black/[0.02]"
+                        }`}
+                      >
+                        <p className={`text-sm font-medium ${byokProvider === p.id ? "text-[--brand-ink]" : "text-[--brand-muted]"}`}>
+                          {p.name}
+                        </p>
+                        <p className="text-xs text-[--brand-muted]/70 mt-0.5">{p.desc}</p>
+                      </button>
+                    ))}
+                  </div>
+
                   <input
                     type="password"
                     value={byokApiKey}
                     onChange={(e) => setByokApiKey(e.target.value)}
-                    placeholder="sk-or-v1-..."
+                    placeholder={BYOK_PROVIDERS.find((p) => p.id === byokProvider)?.placeholder}
                     className="w-full px-5 py-3 bg-white border border-black/10 rounded-full text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[--brand-ink]/20 transition-all"
                   />
                 </motion.div>
@@ -498,7 +572,7 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
       </section>
 
       {/* Estimate & Submit */}
-      <div className="pt-8 text-center">
+      <div className="pt-8 text-center space-y-4">
         {estimatedContacts !== null && (
           <p className="text-sm font-medium text-[--brand-muted] mb-4 bg-white/50 backdrop-blur-sm border border-black/5 rounded-full py-2 px-4 inline-block">
             ~{estimatedContacts} threads estimated <span className="font-normal opacity-70">(actual contacts may vary)</span>
@@ -514,9 +588,21 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
           }
           className="w-full bg-[--brand-ink] text-[--brand-cream] hover:bg-black/80 text-lg py-7 rounded-full font-medium transition-all duration-300 shadow-xl"
         >
-          {isSubmitting ? "Creating checkout..." : "Scan Inbox & Continue"}
+          {isSubmitting ? "Processing..." : "Scan Inbox & Continue"}
         </Button>
+        <button 
+          onClick={() => {
+            window.scrollTo({ top: 0, behavior: "smooth" });
+            setCurrentStep(1);
+          }}
+          className="text-sm text-[--brand-muted] hover:text-[--brand-ink] transition-colors"
+        >
+          Back to Filters
+        </button>
       </div>
-    </div>
+      </motion.div>
+      )}
+      </AnimatePresence>
+    </>
   );
 }

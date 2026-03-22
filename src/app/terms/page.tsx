@@ -22,12 +22,10 @@ export default function TermsPage() {
 
           <section>
             <h2 className="font-serif text-3xl text-[--brand-ink] mb-4">
-              Payment
+              Pricing
             </h2>
             <p className="text-lg">
-              The service costs $9 USD, charged once via Stripe. No
-              subscriptions. No refunds after processing begins. If processing
-              fails, you will not be charged.
+              The service is currently free. No payment required.
             </p>
           </section>
 
@@ -74,8 +72,8 @@ export default function TermsPage() {
               Limitation of Liability
             </h2>
             <p className="text-lg">
-              Our liability is limited to the amount paid for the service ($9
-              USD). We are not liable for any indirect, incidental, or
+              Our liability is limited to the amount paid for the service, if
+              any. We are not liable for any indirect, incidental, or
               consequential damages.
             </p>
           </section>

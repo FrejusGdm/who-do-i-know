@@ -1,12 +1,25 @@
 import { put, del } from "@vercel/blob";
 import { eq } from "drizzle-orm";
+import { writeFileSync } from "fs";
+import { join } from "path";
+import { tmpdir } from "os";
 import { db } from "@/db";
 import { jobs } from "@/db/schema";
 import { fetchMutualThreads, type SenderRecord } from "./gmail";
 import { extractContacts } from "./openrouter";
 import { buildCsv } from "./csv";
 import { sendDownloadEmail } from "./resend";
-import type { FilterConfig, LLMProviderMode } from "@/types";
+import type { FilterConfig, LLMProviderMode, BYOKProvider } from "@/types";
+
+function hasBlobToken(): boolean {
+  const token = process.env.BLOB_READ_WRITE_TOKEN;
+  return !!token && !token.startsWith("PASTE_");
+}
+
+function hasResendKey(): boolean {
+  const key = process.env.RESEND_API_KEY;
+  return !!key && !key.startsWith("PASTE_");
+}
 
 export interface ProgressEvent {
   stage: string;
@@ -48,7 +61,11 @@ export const STAGES = [
   },
 ] as const;
 
-const progressStore = new Map<string, ProgressEvent[]>();
+// Use globalThis so the Map is shared across all module instances in the same process
+// (Next.js 15 after() callbacks and SSE routes may get different module copies)
+const progressStore: Map<string, ProgressEvent[]> =
+  (globalThis as Record<string, unknown>).__progressStore as Map<string, ProgressEvent[]>
+  ?? ((globalThis as Record<string, unknown>).__progressStore = new Map<string, ProgressEvent[]>());
 
 export function getProgress(jobId: string): ProgressEvent[] {
   return progressStore.get(jobId) ?? [];
@@ -66,7 +83,9 @@ export async function runCloudPipeline(
   filterConfig: FilterConfig,
   userEmail: string,
   providerMode: LLMProviderMode,
-  byokApiKey?: string
+  byokApiKey?: string,
+  ollamaModel?: string,
+  byokProvider?: BYOKProvider
 ): Promise<void> {
   try {
     await db
@@ -80,21 +99,28 @@ export async function runCloudPipeline(
       copy: STAGES[0].copy,
     });
 
-    emitProgress(jobId, {
-      stage: "fetch",
-      stageIndex: 1,
-      copy: STAGES[1].copy,
-    });
-
     const senders: SenderRecord[] = await fetchMutualThreads(
       accessToken,
       filterConfig,
       (stage, count) => {
-        if (stage === "filter") {
+        if (stage === "fetch") {
+          emitProgress(jobId, {
+            stage: "fetch",
+            stageIndex: 1,
+            copy: `Found ${count} threads, scanning...`,
+          });
+        } else if (stage === "filter") {
           emitProgress(jobId, {
             stage: "filter",
             stageIndex: 2,
-            copy: STAGES[2].copy,
+            copy: `${count} mutual contacts so far...`,
+            contactCount: count,
+          });
+        } else if (stage === "enrich") {
+          emitProgress(jobId, {
+            stage: "filter",
+            stageIndex: 2,
+            copy: `Reading ${count} conversations for context...`,
             contactCount: count,
           });
         }
@@ -115,12 +141,13 @@ export async function runCloudPipeline(
       contactCount: senders.length,
     });
 
-    const mode = providerMode === "byok" ? "byok" : "cloud";
+    const mode = providerMode === "local" ? "local" : providerMode === "byok" ? "byok" : "cloud";
+    const model = mode === "local" && ollamaModel ? ollamaModel : undefined;
     const { contacts, skippedBatches } = await extractContacts(
       senders,
       mode,
       byokApiKey,
-      undefined,
+      model,
       (processed, total) => {
         emitProgress(jobId, {
           stage: "analyze",
@@ -128,7 +155,8 @@ export async function runCloudPipeline(
           copy: `Analyzing contacts... ${processed}/${total}`,
           contactCount: processed,
         });
-      }
+      },
+      byokProvider
     );
 
     emitProgress(jobId, {
@@ -142,17 +170,28 @@ export async function runCloudPipeline(
     const date = new Date().toISOString().split("T")[0];
     const filename = `whodoyouknow-${date}.csv`;
 
-    const blob = await put(filename, csvContent, {
-      access: "public",
-      contentType: "text/csv",
-    });
+    let downloadUrl: string;
+
+    if (hasBlobToken()) {
+      const blob = await put(filename, csvContent, {
+        access: "public",
+        contentType: "text/csv",
+      });
+      downloadUrl = blob.url;
+    } else {
+      // Local fallback — save CSV to temp directory
+      const localPath = join(tmpdir(), filename);
+      writeFileSync(localPath, csvContent, "utf-8");
+      downloadUrl = localPath;
+      console.log(`[Pipeline] CSV saved locally: ${localPath}`);
+    }
 
     await db
       .update(jobs)
       .set({
         status: "complete",
         contactCount: contacts.length,
-        blobUrl: blob.url,
+        blobUrl: downloadUrl,
         completedAt: new Date(),
       })
       .where(eq(jobs.id, jobId));
@@ -164,17 +203,21 @@ export async function runCloudPipeline(
       contactCount: contacts.length,
     });
 
-    try {
-      await sendDownloadEmail(userEmail, blob.url);
-    } catch (e) {
-      console.error("Failed to send download email:", e);
+    if (hasResendKey()) {
+      try {
+        await sendDownloadEmail(userEmail, downloadUrl);
+      } catch (e) {
+        console.error("Failed to send download email:", e);
+      }
+    } else {
+      console.log("[Pipeline] Skipping email — no Resend API key configured");
     }
 
     setTimeout(() => {
       progressStore.delete(jobId);
     }, 60000);
   } catch (error) {
-    console.error("Pipeline failed:", error);
+    console.error("[Pipeline] FAILED:", error);
     const message =
       error instanceof Error ? error.message : "Unknown error occurred";
     await db
@@ -191,6 +234,7 @@ export async function runCloudPipeline(
 }
 
 export async function cleanupBlob(blobUrl: string): Promise<void> {
+  if (!blobUrl.startsWith("http")) return; // Skip local file paths
   try {
     await del(blobUrl);
   } catch (e) {

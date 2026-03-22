@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { readFileSync, existsSync } from "fs";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { jobs } from "@/db/schema";
@@ -8,13 +9,14 @@ export const dynamic = "force-dynamic";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { jobId: string } }
+  { params }: { params: Promise<{ jobId: string }> }
 ) {
   try {
+    const { jobId } = await params;
     const [job] = await db
       .select()
       .from(jobs)
-      .where(eq(jobs.id, params.jobId))
+      .where(eq(jobs.id, jobId))
       .limit(1);
 
     if (!job) {
@@ -31,14 +33,40 @@ export async function GET(
     await db
       .update(jobs)
       .set({ downloadedAt: new Date() })
-      .where(eq(jobs.id, params.jobId));
+      .where(eq(jobs.id, jobId));
 
-    cleanupBlob(job.blobUrl).catch((e) =>
-      console.error("Blob cleanup error:", e)
-    );
+    const isLocalFile = !job.blobUrl.startsWith("http");
+    const wantsFile = req.nextUrl.searchParams.get("file") === "true";
+
+    // Serve local CSV files directly as a download
+    if (isLocalFile && wantsFile) {
+      if (!existsSync(job.blobUrl)) {
+        return NextResponse.json(
+          { error: "File no longer available" },
+          { status: 410 }
+        );
+      }
+      const csvContent = readFileSync(job.blobUrl, "utf-8");
+      const date = new Date().toISOString().split("T")[0];
+      return new Response(csvContent, {
+        headers: {
+          "Content-Type": "text/csv",
+          "Content-Disposition": `attachment; filename="whodoyouknow-${date}.csv"`,
+        },
+      });
+    }
+
+    // Clean up Vercel Blob files (skip local paths)
+    if (!isLocalFile) {
+      cleanupBlob(job.blobUrl).catch((e) =>
+        console.error("Blob cleanup error:", e)
+      );
+    }
 
     return NextResponse.json({
-      downloadUrl: job.blobUrl,
+      downloadUrl: isLocalFile
+        ? `/api/download/${jobId}?file=true`
+        : job.blobUrl,
       contactCount: job.contactCount,
     });
   } catch (error) {

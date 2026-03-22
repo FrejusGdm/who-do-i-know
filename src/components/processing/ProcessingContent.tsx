@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ProgressStages } from "./ProgressStages";
@@ -14,19 +14,88 @@ interface ProgressData {
   contactCount?: number;
 }
 
+const STAGE_ORDER = ["connect", "fetch", "filter", "analyze", "build", "ready"];
+const STAGE_DELAY = 1000; // 1 second minimum between stage transitions
+
 export function ProcessingContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [currentStage, setCurrentStage] = useState("connect");
-  const [currentCopy, setCurrentCopy] = useState(
-    "Shaking hands with Google..."
-  );
+  // What the UI shows (staggered)
+  const [displayedStage, setDisplayedStage] = useState("connect");
+  const [displayedCopy, setDisplayedCopy] = useState("Shaking hands with Google...");
   const [contactCount, setContactCount] = useState<number | undefined>();
   const [error, setError] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
 
+  // Queue of stage events from backend, replayed with stagger
+  const eventQueueRef = useRef<ProgressData[]>([]);
+  const isAdvancingRef = useRef(false);
+  const displayedIndexRef = useRef(0);
+
+  const advanceStage = useCallback(() => {
+    if (isAdvancingRef.current) return;
+    const queue = eventQueueRef.current;
+    if (queue.length === 0) return;
+
+    isAdvancingRef.current = true;
+
+    const processNext = () => {
+      if (queue.length === 0) {
+        isAdvancingRef.current = false;
+        return;
+      }
+
+      const next = queue[0];
+      const nextIndex = STAGE_ORDER.indexOf(next.stage);
+
+      // Only advance forward, skip duplicate/older stages
+      if (nextIndex <= displayedIndexRef.current && next.stage !== "ready") {
+        // Still update copy/count for same stage (e.g. "7 contacts so far...")
+        if (nextIndex === displayedIndexRef.current) {
+          setDisplayedCopy(next.copy);
+          if (next.contactCount !== undefined) setContactCount(next.contactCount);
+        }
+        queue.shift();
+        processNext();
+        return;
+      }
+
+      // Advance one stage at a time with delay
+      const targetIndex = Math.min(nextIndex, displayedIndexRef.current + 1);
+      const targetStage = STAGE_ORDER[targetIndex];
+
+      setTimeout(() => {
+        displayedIndexRef.current = targetIndex;
+        setDisplayedStage(targetStage);
+
+        // If we've caught up to this event, use its copy
+        if (targetIndex === nextIndex) {
+          setDisplayedCopy(next.copy);
+          if (next.contactCount !== undefined) setContactCount(next.contactCount);
+          queue.shift();
+        }
+
+        // If this was "ready", redirect after showing it
+        if (targetStage === "ready") {
+          isAdvancingRef.current = false;
+          return;
+        }
+
+        processNext();
+      }, STAGE_DELAY);
+    };
+
+    processNext();
+  }, []);
+
   useEffect(() => {
+    const directJobId = searchParams.get("jobId");
+    if (directJobId) {
+      setJobId(directJobId);
+      return;
+    }
+
     const sessionId = searchParams.get("session_id");
     if (!sessionId) return;
 
@@ -56,6 +125,16 @@ export function ProcessingContent() {
     pollForJob();
   }, [searchParams]);
 
+  // Handle redirect when "ready" stage is displayed
+  useEffect(() => {
+    if (displayedStage === "ready" && jobId) {
+      const timeout = setTimeout(() => {
+        router.push(`/download/${jobId}`);
+      }, 2000);
+      return () => clearTimeout(timeout);
+    }
+  }, [displayedStage, jobId, router]);
+
   useEffect(() => {
     if (!jobId) return;
 
@@ -74,21 +153,15 @@ export function ProcessingContent() {
         }
 
         if (data.stage === "ready") {
-          setCurrentStage("ready");
-          setCurrentCopy(data.copy);
-          setContactCount(data.contactCount);
           es.close();
-          setTimeout(() => {
-            router.push(`/download/${jobId}`);
-          }, 2000);
-          return;
         }
 
-        setCurrentStage(data.stage);
-        setCurrentCopy(data.copy);
+        // Queue the event and trigger staggered advance
+        eventQueueRef.current.push(data);
         if (data.contactCount !== undefined) {
           setContactCount(data.contactCount);
         }
+        advanceStage();
       } catch {
         /* ignore parse errors */
       }
@@ -101,7 +174,7 @@ export function ProcessingContent() {
     return () => {
       es.close();
     };
-  }, [jobId, router]);
+  }, [jobId, advanceStage]);
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-[--brand-cream] px-6">
@@ -134,8 +207,8 @@ export function ProcessingContent() {
           </div>
         ) : (
           <ProgressStages
-            currentStage={currentStage}
-            currentCopy={currentCopy}
+            currentStage={displayedStage}
+            currentCopy={displayedCopy}
             contactCount={contactCount}
           />
         )}

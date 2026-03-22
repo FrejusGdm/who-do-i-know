@@ -30,6 +30,8 @@ export type JobStatus = "pending" | "processing" | "complete" | "failed";
 
 export type LLMProviderMode = "cloud" | "local" | "byok";
 
+export type BYOKProvider = "openai" | "gemini" | "openrouter";
+
 export interface ProgressEvent {
   type: "progress" | "heartbeat";
   stage: string;

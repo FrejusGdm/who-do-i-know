@@ -7,13 +7,14 @@ export const dynamic = "force-dynamic";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { jobId: string } }
+  { params }: { params: Promise<{ jobId: string }> }
 ) {
   try {
+    const { jobId } = await params;
     const [job] = await db
       .select()
       .from(jobs)
-      .where(eq(jobs.id, params.jobId))
+      .where(eq(jobs.id, jobId))
       .limit(1);
 
     if (!job) {

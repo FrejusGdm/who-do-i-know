@@ -1,13 +1,16 @@
 "use client";
 
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { HeroBackground } from "./HeroBackground";
 import { signIn } from "@/lib/auth-client";
-import Image from "next/image";
 
 export function Hero() {
+  const [isLoading, setIsLoading] = useState(false);
+
   const handleGetStarted = () => {
+    setIsLoading(true);
     signIn.social({
       provider: "google",
       callbackURL: "/connect",
@@ -56,7 +59,7 @@ export function Hero() {
         >
           Connect your Gmail. We scan your history, find every real person
           you&apos;ve ever interacted with, and hand you a clean spreadsheet.
-          One time. $9.
+          100% free.
         </motion.p>
 
         <motion.div
@@ -68,9 +71,17 @@ export function Hero() {
           <Button
             size="lg"
             onClick={handleGetStarted}
-            className="bg-[--brand-ink] text-[--brand-cream] hover:bg-black/80 hover:text-[--brand-cream] text-lg px-12 py-7 rounded-full font-medium transition-all duration-300 shadow-xl"
+            disabled={isLoading}
+            className="bg-[--brand-ink] text-[--brand-cream] hover:bg-black/80 hover:text-[--brand-cream] text-lg px-12 py-7 rounded-full font-medium transition-all duration-300 shadow-xl disabled:opacity-70"
           >
-            Get My Network — $9
+            {isLoading ? (
+              <span className="flex items-center gap-2">
+                <span className="w-4 h-4 border-2 border-[--brand-cream]/30 border-t-[--brand-cream] rounded-full animate-spin" />
+                Connecting...
+              </span>
+            ) : (
+              "Get My Network — Free"
+            )}
           </Button>
           <p className="text-sm text-[--brand-muted]/60 flex items-center justify-center gap-1.5">
             Local processing via 
@@ -80,6 +91,7 @@ export function Hero() {
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 text-[--brand-muted] hover:text-[--brand-ink] transition-colors font-medium border-b border-transparent hover:border-[--brand-ink]/20 pb-[1px]"
             >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="https://ollama.com/public/icon-64x64.png" alt="Ollama" className="w-3.5 h-3.5 grayscale opacity-70" />
               Ollama
             </a>

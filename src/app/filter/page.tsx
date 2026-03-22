@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useSession } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { FilterPanel } from "@/components/filter/FilterPanel";
-import type { FilterConfig, LLMProviderMode } from "@/types";
+import type { FilterConfig, LLMProviderMode, BYOKProvider } from "@/types";
 
 export default function FilterPage() {
   const { data: session, isPending } = useSession();
@@ -20,30 +20,25 @@ export default function FilterPage() {
   const handleSubmit = async (
     config: FilterConfig,
     providerMode: LLMProviderMode,
-    byokApiKey?: string
+    byokApiKey?: string,
+    ollamaModel?: string,
+    byokProvider?: BYOKProvider
   ) => {
     setIsSubmitting(true);
 
-    if (providerMode === "local") {
-      sessionStorage.setItem("filterConfig", JSON.stringify(config));
-      sessionStorage.setItem("providerMode", "local");
-      router.push("/checkout");
-      return;
-    }
-
     try {
-      const res = await fetch("/api/checkout", {
+      const res = await fetch("/api/job", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filterConfig: config, providerMode, byokApiKey }),
+        body: JSON.stringify({ filterConfig: config, providerMode, byokApiKey, ollamaModel, byokProvider }),
       });
 
       const data = await res.json();
-      if (data.url) {
-        window.location.href = data.url;
+      if (data.jobId) {
+        router.push(`/processing?jobId=${data.jobId}`);
       }
     } catch (error) {
-      console.error("Checkout error:", error);
+      console.error("Job creation error:", error);
     } finally {
       setIsSubmitting(false);
     }

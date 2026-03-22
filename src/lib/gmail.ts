@@ -9,6 +9,7 @@ export interface ThreadMeta {
   userReplied: boolean;
   messageCount: number;
   lastDate: string;
+  bodySnippets: string[];
 }
 
 export interface SenderRecord {
@@ -17,6 +18,7 @@ export interface SenderRecord {
   totalEmails: number;
   lastContact: string;
   subjectSnippets: string[];
+  bodySnippets: string[];
 }
 
 function parseEmailAddress(raw: string): { name: string; email: string } {
@@ -27,6 +29,51 @@ function parseEmailAddress(raw: string): { name: string; email: string } {
       email: match[2].trim(),
     };
   return { name: raw, email: raw };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function extractBodyText(payload: any): string {
+  if (!payload) return "";
+
+  // Simple message (no parts)
+  if (payload.body?.data) {
+    const decoded = Buffer.from(payload.body.data, "base64url").toString("utf-8");
+    if (payload.mimeType === "text/plain") return decoded.trim();
+    if (payload.mimeType === "text/html") return stripHtml(decoded).trim();
+  }
+
+  // Multipart message — prefer text/plain
+  if (payload.parts) {
+    const plainPart = payload.parts.find((p: { mimeType: string }) => p.mimeType === "text/plain");
+    if (plainPart?.body?.data) {
+      return Buffer.from(plainPart.body.data, "base64url").toString("utf-8").trim();
+    }
+    const htmlPart = payload.parts.find((p: { mimeType: string }) => p.mimeType === "text/html");
+    if (htmlPart?.body?.data) {
+      return stripHtml(Buffer.from(htmlPart.body.data, "base64url").toString("utf-8")).trim();
+    }
+    // Nested multipart (e.g. multipart/alternative inside multipart/mixed)
+    for (const part of payload.parts) {
+      const nested = extractBodyText(part);
+      if (nested) return nested;
+    }
+  }
+
+  return "";
+}
+
+function stripHtml(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function buildQuery(filters: FilterConfig): string {
@@ -98,6 +145,7 @@ export async function fetchMutualThreads(
   const threads = threadList.data.threads ?? [];
   onProgress?.("fetch", threads.length);
 
+  // ── Pass 1: Fast metadata scan to identify qualifying threads ──
   const BATCH_SIZE = 20;
   const results: ThreadMeta[] = [];
 
@@ -154,12 +202,48 @@ export async function fetchMutualThreads(
         userReplied,
         messageCount: msgs.length,
         lastDate,
+        bodySnippets: [],
       });
     }
 
     onProgress?.("filter", results.length);
   }
 
+  // ── Pass 2: Fetch full bodies only for qualifying threads ──
+  onProgress?.("enrich", results.length);
+
+  for (let i = 0; i < results.length; i += BATCH_SIZE) {
+    const batch = results.slice(i, i + BATCH_SIZE);
+    const fullThreads = await Promise.all(
+      batch.map((t) =>
+        gmail.users.threads.get({
+          userId: "me",
+          id: t.threadId,
+          format: "full",
+        })
+      )
+    );
+
+    for (let j = 0; j < fullThreads.length; j++) {
+      const msgs = fullThreads[j].data.messages ?? [];
+      const snippets: string[] = [];
+
+      for (const msg of msgs) {
+        if (snippets.length >= 3) break;
+        const from = msg.payload?.headers?.find((h) => h.name === "From")?.value ?? "";
+        // Only extract body from the other person's messages, not the user's
+        if (from.includes(userEmail)) continue;
+        const bodyText = extractBodyText(msg.payload);
+        if (bodyText) {
+          snippets.push(bodyText.substring(0, 500));
+        }
+      }
+
+      batch[j].bodySnippets = snippets;
+    }
+  }
+
+  // ── Group by sender ──
   const bySender = new Map<string, ThreadMeta[]>();
   for (const t of results) {
     const existing = bySender.get(t.senderEmail) ?? [];
@@ -172,5 +256,6 @@ export async function fetchMutualThreads(
     totalEmails: ts.reduce((sum, t) => sum + t.messageCount, 0),
     lastContact: ts[ts.length - 1].lastDate,
     subjectSnippets: ts.map((t) => t.subjectSnippet).slice(0, 5),
+    bodySnippets: ts.flatMap((t) => t.bodySnippets).slice(0, 3),
   }));
 }

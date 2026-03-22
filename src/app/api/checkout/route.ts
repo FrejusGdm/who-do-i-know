@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await auth.api.getSession({ headers: headers() });
+    const session = await auth.api.getSession({ headers: await headers() });
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
