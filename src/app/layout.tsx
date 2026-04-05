@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     title: "WhoDoYouKnow",
     description:
       "You spent years meeting people. Don't lose them. Connect Gmail, get a CSV of your network. $9, one time.",
-    url: "https://whodoyouknow.xyz",
+    url: "https://whodoyouknow.work",
     siteName: "WhoDoYouKnow",
     type: "website",
   },

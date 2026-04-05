@@ -9,7 +9,7 @@
 
 **Primary users:** College graduates, job changers, conference attendees — anyone with a rich email history and no organized way to recall their network.
 
-**Business model:** One-time flat fee ($9). No subscriptions. No accounts after delivery. Pay → process → download → done.
+**Business model:** 100% free. No subscriptions. No accounts after delivery. Connect → process → download → done.
 
 ---
 
@@ -18,9 +18,8 @@
 ```
 / (landing)
   → /connect       (Google OAuth via BetterAuth)
-  → /filter        (optional: exclude domains, date ranges, categories)
-  → /checkout      (Stripe $9 payment)
-  → /processing    (real-time progress via SSE or polling)
+  → /filter        (optional: exclude domains, date ranges, categories, select processing mode)
+  → /processing    (real-time progress via SSE or polling, bypasses checkout)
   → /download      (expiring signed URL, 15 min TTL)
   → [data deleted] (immediate server-side purge)
 ```
@@ -34,7 +33,7 @@
 - [ ] Clear value proposition headline
 - [ ] Sample CSV preview (static, anonymized)
 - [ ] Trust signals: "We never store your emails", "Data deleted after download", "Read-only Gmail access"
-- [ ] Single CTA: "Get My Network — $9"
+- [ ] Single CTA: "Get My Network — Free"
 - [ ] Fancy serif + sans font pairing (Playfair Display + Inter or similar)
 - [ ] Framer Motion page transitions + scroll animations
 - [ ] GSAP for hero text reveal animation
@@ -47,20 +46,18 @@
 - [ ] **Agent note:** Always check BetterAuth docs at https://www.better-auth.com/docs — use the Google provider plugin, social login plugin, and session management. Do NOT hand-roll auth.
 
 ### 3.3 Filter Screen
-Users can configure what gets scanned before paying:
+Users can configure what gets scanned:
 - [ ] **Date range** — e.g. "only emails from last 4 years"
 - [ ] **Exclude domains** — text input to blocklist e.g. `@canvas.edu`, `@mailchimp.com`
 - [ ] **Categories to skip** — toggles: Promotions, Social, Updates, Forums (maps to Gmail categories)
 - [ ] **Min interaction threshold** — slider: "only include people I've emailed at least N times" (default: 2)
-- [ ] **Contact type filter** — checkboxes: Classmates, Professors, Professionals, Personal
+- [ ] **Processing Mode** — split pane selection: Local (Ollama, recommended for privacy), BYOK (custom OpenRouter key), or Cloud (currently marked Coming Soon)
 - [ ] Show estimated contact count (live, based on filters, via a lightweight pre-scan)
-- [ ] Save filter config in session (not DB)
 
-### 3.4 Payment
-- [ ] Stripe Checkout session, $9 USD one-time
-- [ ] Webhook: `checkout.session.completed` → trigger processing job
-- [ ] Payment metadata: user session ID, filter config hash
-- [ ] On success: redirect to /processing
+### 3.4 Payment (Bypassed)
+- [ ] Previously Stripe Checkout session, $9 USD one-time
+- [ ] **Currently bypassed:** The application is 100% free. Users are routed directly from `/filter` to `/processing` via a new `/api/job` endpoint.
+- [ ] The Stripe code remains in the codebase for potential future use but is not active in the primary Local/BYOK flows.
 
 ### 3.5 Email Processing Pipeline
 See Section 5 for full technical spec.
@@ -106,7 +103,7 @@ See Section 5 for full technical spec.
 - **UI:** shadcn/ui + Tailwind CSS
 - **Animation:** Framer Motion + GSAP (hero only)
 - **Auth:** BetterAuth (Google provider plugin)
-- **Payments:** Stripe (Checkout + Webhooks)
+- **Payments:** Stripe code is preserved but currently bypassed (app is 100% free).
 - **LLM:** OpenRouter API (model-agnostic, see 5.3)
 - **Background jobs:** Vercel Background Functions or QStash (Upstash)
 - **File storage:** Vercel Blob (temp, auto-delete)
@@ -180,7 +177,7 @@ jobs (
 - Vercel Blob: negligible (< 1MB CSV, 15 min)
 - Resend: free tier
 - **Total COGS: ~$0.20–0.50 per user**
-- **Margin at $9: ~$8.50–8.80 (~95%)**
+- **Margin at $9: N/A (App is currently 100% free)**
 
 **Processing time target:** < 5 minutes for up to 500 contacts
 
@@ -225,7 +222,7 @@ To submit tonight:
 
 ## 10. Launch Checklist
 
-- [ ] Domain: whodoyouknow.xyz (or similar)
+- [ ] Domain: whodoyouknow.work (or similar)
 - [ ] Vercel deployment
 - [ ] Google Cloud project + OAuth app
 - [ ] Stripe account + webhook

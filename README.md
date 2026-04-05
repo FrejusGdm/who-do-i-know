@@ -5,7 +5,7 @@ Find out who you actually know from your Gmail. Scans your email threads, identi
 <!-- TODO: Add screenshot -->
 ![Screenshot](public/screenshot.png)
 
-<!-- TODO: Add demo video link -->
+<video src="https://github.com/FrejusGdm/who-do-i-know/raw/main/public/demo-whoYouKnow.mp4" controls width="100%"></video>
 
 ## Features
 
@@ -161,7 +161,7 @@ Open [http://localhost:3000](http://localhost:3000) and click "Get My Network" t
 | `STRIPE_WEBHOOK_SECRET` | No | Stripe webhook secret |
 | `STRIPE_PRICE_ID` | No | Stripe price ID |
 | `RESEND_API_KEY` | No | [Resend](https://resend.com) API key for email notifications |
-| `RESEND_FROM_EMAIL` | No | From address for emails (default: `noreply@whodoyouknow.xyz`) |
+| `RESEND_FROM_EMAIL` | No | From address for emails (default: `noreply@whodoyouknow.work`) |
 
 ## Scripts
 

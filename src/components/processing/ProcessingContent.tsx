@@ -195,7 +195,7 @@ export function ProcessingContent() {
             <AlertCircle className="w-10 h-10 text-[--brand-ink] mx-auto mb-4" strokeWidth={1.5} />
             <p className="text-base text-[--brand-ink] mb-6">{error}</p>
             <p className="text-sm text-[--brand-muted] mb-6">
-              Need help? Contact support@whodoyouknow.xyz
+              Need help? Contact support@whodoyouknow.work
             </p>
             <Button
               variant="outline"

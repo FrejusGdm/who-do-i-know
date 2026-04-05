@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://whodoyouknow.xyz/sitemap.xml
+Sitemap: https://whodoyouknow.work/sitemap.xml

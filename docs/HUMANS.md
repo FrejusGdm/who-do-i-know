@@ -65,7 +65,7 @@ OPENROUTER_API_KEY=
 
 # Email delivery (optional)
 RESEND_API_KEY=
-RESEND_FROM_EMAIL=noreply@whodoyouknow.xyz
+RESEND_FROM_EMAIL=noreply@whodoyouknow.work
 
 # App
 NEXT_PUBLIC_APP_URL=http://localhost:3000

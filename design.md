@@ -24,7 +24,7 @@ whodoyouknow/
 │   │   ├── page.tsx                  # Landing page
 │   │   ├── connect/page.tsx          # Post-OAuth, pre-filter
 │   │   ├── filter/page.tsx           # Filter configuration
-│   │   ├── checkout/page.tsx         # Stripe checkout redirect
+│   │   ├── checkout/page.tsx         # Stripe checkout (currently bypassed)
 │   │   ├── processing/page.tsx       # Job progress screen
 │   │   ├── download/[jobId]/page.tsx # Download screen
 │   │   ├── privacy/page.tsx          # Privacy policy
@@ -32,7 +32,8 @@ whodoyouknow/
 │   │   └── api/
 │   │       ├── auth/[...betterauth]/ # BetterAuth handler
 │   │       ├── prescan/route.ts      # Estimate contact count
-│   │       ├── checkout/route.ts     # Create Stripe session
+│   │       ├── job/route.ts          # Create job directly (bypass checkout)
+│   │       ├── checkout/route.ts     # Create Stripe session (inactive)
 │   │       ├── webhook/stripe/route.ts
 │   │       ├── process/route.ts      # Trigger pipeline
 │   │       ├── progress/[jobId]/route.ts  # SSE stream
@@ -98,32 +99,57 @@ BLOB_READ_WRITE_TOKEN=                 # Vercel Blob
 
 # Email
 RESEND_API_KEY=
-RESEND_FROM_EMAIL=noreply@whodoyouknow.xyz
+RESEND_FROM_EMAIL=noreply@whodoyouknow.work
 
 # App
-NEXT_PUBLIC_APP_URL=https://whodoyouknow.xyz
+NEXT_PUBLIC_APP_URL=https://whodoyouknow.work
 ```
 
 ---
 
 ## 3. Auth Setup (BetterAuth)
 
+BetterAuth is **self-hosted** — no external API key needed. It runs as part of the Next.js app.
+
+### Files
+- `src/lib/auth.ts` — Server-side BetterAuth instance (Google OAuth, Drizzle adapter, session config)
+- `src/lib/auth-client.ts` — Client-side auth helpers (`signIn`, `signOut`, `useSession`) from `better-auth/react`
+- `src/app/api/auth/[...all]/route.ts` — Catch-all API route that handles all auth endpoints
+
+### Schema
+BetterAuth requires 4 tables: `user`, `session`, `account`, `verification`. These are defined in `src/db/schema.ts` alongside app tables.
+
+**To regenerate or update auth tables** (e.g., after adding a Better Auth plugin):
+```bash
+npx @better-auth/cli generate   # generates auth-schema.ts
+# Merge the generated tables into src/db/schema.ts, then delete auth-schema.ts
+pnpm db:push                    # push to Neon
+```
+
+### Adding Better Auth plugins
+Plugins must be added to **both** files:
+1. Server plugin in `src/lib/auth.ts` → `plugins: [nextCookies(), yourPlugin()]`
+2. Client plugin in `src/lib/auth-client.ts` → `plugins: [yourClientPlugin()]`
+
+### Key config
 ```ts
 // src/lib/auth.ts
-// AGENT: Read https://www.better-auth.com/docs/authentication/google
-// Use the Google provider plugin. Do not hand-roll.
-
 import { betterAuth } from "better-auth"
 import { drizzleAdapter } from "better-auth/adapters/drizzle"
+import { nextCookies } from "better-auth/next-js"
 import { db } from "@/db"
+import * as schema from "@/db/schema"
 
 export const auth = betterAuth({
-  database: drizzleAdapter(db, { provider: "pg" }),
+  baseURL: process.env.BETTER_AUTH_URL,
+  secret: process.env.BETTER_AUTH_SECRET,
+  database: drizzleAdapter(db, { provider: "pg", schema }), // ← schema must be passed
   socialProviders: {
     google: {
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      scopes: [
+      scope: [
+        "openid", "email", "profile",
         "https://www.googleapis.com/auth/gmail.readonly",
         "https://www.googleapis.com/auth/contacts.readonly",
       ],
@@ -134,37 +160,30 @@ export const auth = betterAuth({
   session: {
     expiresIn: 60 * 60 * 2,  // 2 hours — enough for one job
   },
+  plugins: [nextCookies()],
 })
-
-// API route: src/app/api/auth/[...betterauth]/route.ts
-// import { auth } from "@/lib/auth"
-// export const { GET, POST } = auth.handler
 ```
 
 ---
 
 ## 4. Database Schema
 
-```ts
-// src/db/schema.ts
-import { pgTable, uuid, text, jsonb, integer, timestamp } from "drizzle-orm/pg-core"
+All tables are defined in `src/db/schema.ts`. This includes both Better Auth tables and app tables.
 
-export const jobs = pgTable("jobs", {
-  id:            uuid("id").primaryKey().defaultRandom(),
-  userEmail:     text("user_email").notNull(),
-  status:        text("status").notNull().default("pending"),
-  // status values: pending | processing | complete | failed
-  filterConfig:  jsonb("filter_config"),
-  contactCount:  integer("contact_count"),
-  blobUrl:       text("blob_url"),
-  errorMessage:  text("error_message"),
-  createdAt:     timestamp("created_at").defaultNow(),
-  completedAt:   timestamp("completed_at"),
-  downloadedAt:  timestamp("downloaded_at"),
-})
+**Auth tables** (managed by Better Auth — do not modify column names):
+- `user` — id, name, email, emailVerified, image, timestamps
+- `session` — id, token, expiresAt, userId, ipAddress, userAgent, timestamps
+- `account` — id, accountId, providerId, userId, accessToken, refreshToken, scope, timestamps
+- `verification` — id, identifier, value, expiresAt, timestamps
 
-// BetterAuth will create its own tables via drizzleAdapter
-// Run: npx drizzle-kit push
+**App tables:**
+- `jobs` — id (uuid), userEmail, status (pending|processing|complete|failed), filterConfig, contactCount, blobUrl, errorMessage, providerMode, stripeSessionId, timestamps
+
+**Pushing schema changes:**
+```bash
+pnpm db:push          # pushes current schema to Neon
+pnpm db:generate      # generates migration files
+pnpm db:studio        # opens Drizzle Studio
 ```
 
 ---
@@ -591,10 +610,10 @@ THIRD PARTIES
 - Vercel: hosting and temporary file storage
 
 YOUR RIGHTS
-You may request deletion of your data at any time by emailing privacy@whodoyouknow.xyz.
+You may request deletion of your data at any time by emailing privacy@whodoyouknow.work.
 
 CONTACT
-privacy@whodoyouknow.xyz
+privacy@whodoyouknow.work
 ```
 
 ---
@@ -604,9 +623,9 @@ privacy@whodoyouknow.xyz
 When filling out the Google Cloud Console OAuth consent screen:
 
 **App name:** WhoDoYouKnow
-**App homepage:** https://whodoyouknow.xyz
-**Privacy policy:** https://whodoyouknow.xyz/privacy
-**Authorized domain:** whodoyouknow.xyz
+**App homepage:** https://whodoyouknow.work
+**Privacy policy:** https://whodoyouknow.work/privacy
+**Authorized domain:** whodoyouknow.work
 
 **Scope justification (copy-paste this):**
 > `gmail.readonly`: We read Gmail thread metadata (sender, subject snippets, message count) to identify people the user has meaningfully communicated with. Email content is never stored. Data is processed in-memory and deleted within 15 minutes.

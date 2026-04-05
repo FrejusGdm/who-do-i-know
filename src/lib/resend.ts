@@ -9,13 +9,27 @@ function getResend(): Resend {
   return _resend;
 }
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 export async function sendDownloadEmail(
   to: string,
   downloadUrl: string
 ): Promise<void> {
+  if (!downloadUrl.startsWith("https://")) {
+    throw new Error("Refusing to email non-HTTPS download URL");
+  }
+
+  const safeUrl = escapeHtml(downloadUrl);
   const resend = getResend();
   await resend.emails.send({
-    from: process.env.RESEND_FROM_EMAIL ?? "noreply@whodoyouknow.xyz",
+    from: process.env.RESEND_FROM_EMAIL ?? "noreply@whodoyouknow.work",
     to,
     subject: "Your WhoDoYouKnow download is ready",
     html: `
@@ -25,8 +39,8 @@ export async function sendDownloadEmail(
           We found your contacts. Click below to download your spreadsheet.
           This link expires in 15 minutes.
         </p>
-        <a href="${downloadUrl}" 
-           style="display: inline-block; background: #1A1714; color: #FAF7F2; 
+        <a href="${safeUrl}"
+           style="display: inline-block; background: #1A1714; color: #FAF7F2;
                   padding: 12px 32px; text-decoration: none; border-radius: 6px;
                   font-size: 16px; margin-top: 16px;">
           Download CSV

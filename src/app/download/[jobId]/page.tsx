@@ -76,7 +76,7 @@ export default function DownloadPage() {
           </h1>
           <p className="text-[--brand-muted] mb-6 leading-relaxed">{error}</p>
           <p className="text-sm text-[--brand-muted]">
-            Need help? Contact support@whodoyouknow.xyz
+            Need help? Contact support@whodoyouknow.work
           </p>
         </div>
       </main>

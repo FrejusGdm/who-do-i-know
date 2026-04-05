@@ -84,10 +84,10 @@ export default function TermsPage() {
             </h2>
             <p className="text-lg">
               <a
-                href="mailto:support@whodoyouknow.xyz"
+                href="mailto:support@whodoyouknow.work"
                 className="underline hover:text-[--brand-ink] transition-colors"
               >
-                support@whodoyouknow.xyz
+                support@whodoyouknow.work
               </a>
             </p>
           </section>

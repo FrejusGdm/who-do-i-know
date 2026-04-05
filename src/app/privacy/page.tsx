@@ -3,7 +3,7 @@ export default function PrivacyPage() {
     <main className="min-h-screen bg-[--brand-cream] py-24 px-6">
       <div className="max-w-2xl mx-auto">
         <h1 className="font-serif text-5xl md:text-6xl tracking-tight text-[--brand-ink] mb-4">Privacy Policy</h1>
-        <p className="text-lg font-light text-[--brand-muted] mb-16">Last updated: January 2026</p>
+        <p className="text-lg font-light text-[--brand-muted] mb-16">Last updated: April 2026</p>
 
         <div className="space-y-12 text-[--brand-muted] leading-relaxed">
           <p>
@@ -78,6 +78,29 @@ export default function PrivacyPage() {
 
           <section>
             <h2 className="font-serif text-3xl text-[--brand-ink] mb-4">
+              Data Security
+            </h2>
+            <ul className="list-disc list-inside space-y-3 text-lg">
+              <li>
+                All connections to our servers are encrypted using HTTPS/TLS
+              </li>
+              <li>
+                Google user data is processed entirely in memory and is never
+                written to disk or persisted in any database
+              </li>
+              <li>
+                Google OAuth access tokens are revoked and deleted immediately
+                after processing completes
+              </li>
+              <li>
+                We do not retain any copies of your email content, contact
+                data, or Google account credentials
+              </li>
+            </ul>
+          </section>
+
+          <section>
+            <h2 className="font-serif text-3xl text-[--brand-ink] mb-4">
               Google API Services
             </h2>
             <p className="text-lg">
@@ -96,14 +119,37 @@ export default function PrivacyPage() {
 
           <section>
             <h2 className="font-serif text-3xl text-[--brand-ink] mb-4">
+              Prohibited Uses
+            </h2>
+            <p className="text-lg mb-4">
+              We do not use Google user data for any purpose other than
+              providing the contact extraction service you requested.
+              Specifically, Google user data is never used for:
+            </p>
+            <ul className="list-disc list-inside space-y-3 text-lg">
+              <li>Targeted, personalized, or interest-based advertising</li>
+              <li>Selling, renting, or trading data to third parties or data brokers</li>
+              <li>Training AI or machine learning models</li>
+              <li>Determining creditworthiness or for lending purposes</li>
+              <li>Any purpose unrelated to the core functionality of WhoDoYouKnow</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2 className="font-serif text-3xl text-[--brand-ink] mb-4">
               Third Parties
             </h2>
+            <p className="text-lg mb-4">
+              We do not sell, rent, or trade your Google user data to any
+              third party. We only share data with the following service
+              providers, strictly to operate the service:
+            </p>
             <ul className="list-disc list-inside space-y-3 text-lg">
               <li>
                 OpenRouter: Routes AI inference to models from OpenAI and
-                Anthropic. These providers have stated that API data is not
-                used for model training. We are not responsible for changes
-                to their policies — please review their terms directly.
+                Anthropic. Only email metadata (addresses and subject
+                snippets) is sent for contact categorization. These providers
+                have stated that API data is not used for model training.
               </li>
               <li>Vercel: hosting and temporary file storage</li>
             </ul>
@@ -115,8 +161,8 @@ export default function PrivacyPage() {
             </h2>
             <p className="text-lg">
               You may request deletion of your data at any time by emailing{" "}
-              <a href="mailto:privacy@whodoyouknow.xyz" className="underline hover:text-[--brand-ink] transition-colors">
-                privacy@whodoyouknow.xyz
+              <a href="mailto:privacy@whodoyouknow.work" className="underline hover:text-[--brand-ink] transition-colors">
+                privacy@whodoyouknow.work
               </a>
               .
             </p>
@@ -127,8 +173,8 @@ export default function PrivacyPage() {
               Contact
             </h2>
             <p className="text-lg">
-              <a href="mailto:privacy@whodoyouknow.xyz" className="underline hover:text-[--brand-ink] transition-colors">
-                privacy@whodoyouknow.xyz
+              <a href="mailto:privacy@whodoyouknow.work" className="underline hover:text-[--brand-ink] transition-colors">
+                privacy@whodoyouknow.work
               </a>
             </p>
           </section>
