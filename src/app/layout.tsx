@@ -15,13 +15,13 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "WhoDoYouKnow — Your Network, One Download",
+  title: "WhoDoYouKnow — Private Relationship Memory",
   description:
-    "Connect your Gmail. We scan your history, find every real person you've ever interacted with, and hand you a clean spreadsheet. One time. $9.",
+    "A private personal CRM for Gmail relationships, summaries, notes, exports, and outreach planning.",
   openGraph: {
     title: "WhoDoYouKnow",
     description:
-      "You spent years meeting people. Don't lose them. Connect Gmail, get a CSV of your network. $9, one time.",
+      "You spent years meeting people. Don't lose them. Build a private relationship memory from Gmail.",
     url: "https://whodoyouknow.work",
     siteName: "WhoDoYouKnow",
     type: "website",
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "WhoDoYouKnow",
     description:
-      "You spent years meeting people. Don't lose them. Connect Gmail, get a CSV of your network.",
+      "You spent years meeting people. Don't lose them. Build a private relationship memory from Gmail.",
   },
   robots: {
     index: true,

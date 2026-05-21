@@ -1,20 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
 import { countThreads } from "@/lib/gmail";
 import { db } from "@/db";
 import { account } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import type { FilterConfig } from "@/types";
+import { requireSession } from "@/lib/auth-guard";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await auth.api.getSession({ headers: await headers() });
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { session, error: authErr } = await requireSession();
+    if (authErr) return authErr;
 
     const [googleAccount] = await db
       .select()

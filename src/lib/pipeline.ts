@@ -6,9 +6,9 @@ import { tmpdir } from "os";
 import { db } from "@/db";
 import { jobs } from "@/db/schema";
 import { fetchMutualThreads, type SenderRecord } from "./gmail";
-import { extractContacts } from "./openrouter";
-import { buildCsv } from "./csv";
 import { sendDownloadEmail } from "./resend";
+import { buildRelationshipMemoryCsv, storeRelationshipMemory } from "./relationship-memory";
+import { processQueuedAITasks } from "./ai-task-processor";
 import type { FilterConfig, LLMProviderMode, BYOKProvider } from "@/types";
 
 function hasBlobToken(): boolean {
@@ -79,6 +79,7 @@ function emitProgress(jobId: string, event: ProgressEvent) {
 
 export async function runCloudPipeline(
   jobId: string,
+  userId: string,
   accessToken: string,
   filterConfig: FilterConfig,
   userEmail: string,
@@ -143,30 +144,46 @@ export async function runCloudPipeline(
 
     const mode = providerMode === "local" ? "local" : providerMode === "byok" ? "byok" : "cloud";
     const model = mode === "local" && ollamaModel ? ollamaModel : undefined;
-    const { contacts, skippedBatches } = await extractContacts(
+
+    const memoryStats = await storeRelationshipMemory({
+      userId,
       senders,
+      contacts: [],
+      storeRawBodies: filterConfig.storeRawBodies ?? true,
+    });
+
+    emitProgress(jobId, {
+      stage: "analyze",
+      stageIndex: 3,
+      copy: `Queued ${memoryStats.queuedTasks} AI workers for thread and person summaries...`,
+      contactCount: memoryStats.peopleCount,
+    });
+
+    const taskStats = await processQueuedAITasks({
+      userId,
       mode,
-      byokApiKey,
+      apiKey: byokApiKey,
       model,
-      (processed, total) => {
+      byokProvider,
+      maxTasks: 80,
+      onProgress: (processed, total) => {
         emitProgress(jobId, {
           stage: "analyze",
           stageIndex: 3,
-          copy: `Analyzing contacts... ${processed}/${total}`,
-          contactCount: processed,
+          copy: `Processing AI workers... ${processed}/${total}`,
+          contactCount: memoryStats.peopleCount,
         });
       },
-      byokProvider
-    );
+    });
 
     emitProgress(jobId, {
       stage: "build",
       stageIndex: 4,
       copy: STAGES[4].copy,
-      contactCount: contacts.length,
+      contactCount: memoryStats.peopleCount,
     });
 
-    const csvContent = buildCsv(contacts, skippedBatches);
+    const csvContent = await buildRelationshipMemoryCsv(userId);
     const date = new Date().toISOString().split("T")[0];
     const filename = `whodoyouknow-${date}.csv`;
 
@@ -190,7 +207,8 @@ export async function runCloudPipeline(
       .update(jobs)
       .set({
         status: "complete",
-        contactCount: contacts.length,
+        contactCount: memoryStats.peopleCount,
+        errorMessage: null,
         blobUrl: downloadUrl,
         completedAt: new Date(),
       })
@@ -199,8 +217,8 @@ export async function runCloudPipeline(
     emitProgress(jobId, {
       stage: "ready",
       stageIndex: 5,
-      copy: `${contacts.length} people. That's your network.`,
-      contactCount: contacts.length,
+      copy: `${memoryStats.peopleCount} people saved. ${taskStats.remaining} AI workers remaining.`,
+      contactCount: memoryStats.peopleCount,
     });
 
     if (hasResendKey()) {

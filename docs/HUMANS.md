@@ -4,14 +4,16 @@ This file is for people who want to run, understand, or contribute to the app.
 
 ## What this app does
 
-WhoDoYouKnow helps you export your real network from Gmail into a clean CSV.
+WhoDoYouKnow helps you build a private relationship memory from Gmail. It stores people, conversations, private notes, AI summaries, and mentor-signal rankings, then lets you export the pieces you need as CSVs.
 
 Flow:
 
 1. Connect Gmail (Google OAuth)
 2. Pick filters (date range, domains, categories)
 3. Choose processing mode (Cloud, Local/Ollama, or Bring Your Own Key)
-4. Download CSV
+4. Save relationship memory to the database
+5. Run queued AI workers for thread summaries, person summaries, and mentor-signal reviews
+6. Use the dashboard, person detail pages, Mentor Finder, and CSV exports
 
 ## Run it locally
 
@@ -57,7 +59,7 @@ GOOGLE_CLIENT_SECRET=
 # Database (Neon Postgres)
 DATABASE_URL=
 
-# Storage (Vercel Blob)
+# Storage (optional; local dev falls back to temp CSV files)
 BLOB_READ_WRITE_TOKEN=
 
 # LLM - only needed for Cloud mode (optional if using Ollama)
@@ -92,11 +94,11 @@ pnpm db:push
 
 ## Processing Modes
 
-The app supports 3 ways to run the LLM contact extraction:
+The app supports 3 ways to run AI relationship processing:
 
 ### Cloud (OpenRouter)
 - Requires `OPENROUTER_API_KEY` in `.env.local`
-- Uses `anthropic/claude-3.5-sonnet` with fallback to `openai/gpt-4o-mini`
+- Uses the default model configured in `src/lib/openrouter.ts`
 - Fastest option, works in production
 
 ### Local (Ollama) — privacy-first
@@ -125,12 +127,29 @@ If Ollama isn't running, the UI shows a clear error with install instructions an
 - Key is used for that session only, never stored
 - Same models and behavior as Cloud mode
 
+## Relationship Memory Pipeline
+
+The Gmail pipeline does not produce one generic row per contact anymore. It saves durable relationship memory first, then uses a task queue so multiple AI passes can work over the same raw material:
+
+- Gmail sync saves `people`, `contact_methods`, `email_threads`, `email_messages`, and `person_thread_links`.
+- If full-context processing is enabled, `email_messages.body_text` stores the raw message body for later summarization and reprocessing.
+- `ai_processing_tasks` queues independent workers for `thread_summarizer`, `person_summarizer`, and `mentor_signal_reviewer`.
+- `ai_thread_summaries` captures what happened in each thread, including topics, personal details, follow-up signals, evidence, and confidence.
+- `ai_person_summaries` combines thread summaries plus private notes into relationship summaries, how-you-know-them, why-they-matter, notable advice, open loops, and mentor-signal score.
+- `outreach_tasks` is currently used as the Mentor Finder table. It stores candidates and evidence, not generated outreach drafts.
+- Manual notes on a person detail page enqueue a fresh person summary task.
+- `people.review_status` drives the human review lifecycle: `new`, `needs_review`, `confirmed`, `not_mentor`, or `archived`.
+- `/review` is the spreadsheet-style cleanup workspace for confirming mentors, marking friends, adding phone/social links, and archiving noisy senders.
+- Default People and contact exports hide archived records. The mentor export only includes confirmed mentors.
+
+You can resume queued work with `POST /api/ai/process` while authenticated. The body can include `maxTasks`, `providerMode`, `byokApiKey`, `byokProvider`, and `ollamaModel`.
+
 ## Database
 
 All tables in `src/db/schema.ts`. Uses Drizzle ORM with Neon Postgres.
 
 Auth tables (managed by Better Auth): `user`, `session`, `account`, `verification`
-App tables: `jobs`
+Core app tables: `jobs`, `people`, `contact_methods`, `email_threads`, `email_messages`, `person_thread_links`, `ai_processing_tasks`, `ai_thread_summaries`, `ai_person_summaries`, `notes`, `tags`, `person_tags`, `outreach_tasks`, `imports`, `sync_runs`
 
 Commands:
 ```bash
@@ -143,7 +162,7 @@ pnpm db:studio     # open Drizzle Studio
 
 - `src/app` — routes and API endpoints
 - `src/components` — UI and flow components
-- `src/lib` — auth, Gmail, LLM, pipeline, CSV, Stripe, email
+- `src/lib` — auth, Gmail, AI worker queue, relationship memory, pipeline, CSV exports, Stripe, email
 - `src/db` — schema and DB client
 - `src/types` — shared TypeScript types
 

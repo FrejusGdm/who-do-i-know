@@ -3,7 +3,7 @@ export default function PrivacyPage() {
     <main className="min-h-screen bg-[--brand-cream] py-24 px-6">
       <div className="max-w-2xl mx-auto">
         <h1 className="font-serif text-5xl md:text-6xl tracking-tight text-[--brand-ink] mb-4">Privacy Policy</h1>
-        <p className="text-lg font-light text-[--brand-muted] mb-16">Last updated: April 2026</p>
+        <p className="text-lg font-light text-[--brand-muted] mb-16">Last updated: May 2026</p>
 
         <div className="space-y-12 text-[--brand-muted] leading-relaxed">
           <p>
@@ -24,14 +24,15 @@ export default function PrivacyPage() {
 
           <section>
             <h2 className="font-serif text-3xl text-[--brand-ink] mb-4">
-              Data We Process (Not Store)
+              Data We Process
             </h2>
             <p className="text-lg">
               Email metadata (sender names, email addresses, subject lines,
-              message counts) and message content are processed in memory on
-              our servers to understand your relationships. Nothing is stored,
-              logged, or retained beyond what is described below. All data is
-              deleted immediately after your CSV is generated.
+              message counts) and, when you enable full-context processing,
+              message content are processed to understand your relationships.
+              Full-context processing stores raw message bodies in your private
+              database so the app can build better summaries and reprocess them
+              later.
             </p>
           </section>
 
@@ -43,8 +44,14 @@ export default function PrivacyPage() {
               <li>Your email address (to deliver your download link)</li>
               <li>Job status (pending/processing/complete)</li>
               <li>
-                Your filter preferences (date range, excluded domains) — deleted
-                after job completion
+                Your Gmail relationship memory: people, contact methods,
+                thread metadata, stored message bodies when enabled, AI
+                summaries, private notes, tags, mentor-signal rankings, and
+                export records
+              </li>
+              <li>
+                Your filter preferences, sync history, and queued AI processing
+                task metadata
               </li>
             </ul>
           </section>
@@ -55,11 +62,13 @@ export default function PrivacyPage() {
             </h2>
             <ul className="list-disc list-inside space-y-3 text-lg">
               <li>
-                Email content is processed in memory but never written to disk,
-                logged, or persisted in any database
+                Google OAuth access tokens after processing completes
               </li>
               <li>
-                Contact names or personal information from your contacts
+                AI provider keys supplied through BYOK mode
+              </li>
+              <li>
+                Payment card information
               </li>
             </ul>
           </section>
@@ -69,10 +78,10 @@ export default function PrivacyPage() {
               Data Deletion
             </h2>
             <p className="text-lg">
-              All processed data is permanently deleted within 15 minutes of
-              your download, or within 24 hours if no download occurs. Your
-              Google access token is deleted immediately after processing
-              completes.
+              You can request deletion of stored relationship data at any time.
+              Google OAuth access tokens are deleted immediately after
+              processing completes. CSV download files may be removed or expire
+              separately from the database-backed relationship memory.
             </p>
           </section>
 
@@ -85,16 +94,15 @@ export default function PrivacyPage() {
                 All connections to our servers are encrypted using HTTPS/TLS
               </li>
               <li>
-                Google user data is processed entirely in memory and is never
-                written to disk or persisted in any database
+                Google user data is stored only to provide the private
+                relationship-memory product you requested
               </li>
               <li>
                 Google OAuth access tokens are revoked and deleted immediately
                 after processing completes
               </li>
               <li>
-                We do not retain any copies of your email content, contact
-                data, or Google account credentials
+                BYOK API keys are used for the current request and are not saved
               </li>
             </ul>
           </section>
@@ -123,7 +131,7 @@ export default function PrivacyPage() {
             </h2>
             <p className="text-lg mb-4">
               We do not use Google user data for any purpose other than
-              providing the contact extraction service you requested.
+              providing the relationship-memory service you requested.
               Specifically, Google user data is never used for:
             </p>
             <ul className="list-disc list-inside space-y-3 text-lg">
@@ -147,9 +155,11 @@ export default function PrivacyPage() {
             <ul className="list-disc list-inside space-y-3 text-lg">
               <li>
                 OpenRouter: Routes AI inference to models from OpenAI and
-                Anthropic. Only email metadata (addresses and subject
-                snippets) is sent for contact categorization. These providers
-                have stated that API data is not used for model training.
+                Anthropic. When Cloud or BYOK processing is selected, thread
+                excerpts, message bodies, private notes, and relationship
+                context may be sent for summarization and mentor-signal
+                analysis. These providers have stated that API data is not used
+                for model training.
               </li>
               <li>Vercel: hosting and temporary file storage</li>
             </ul>

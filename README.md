@@ -1,6 +1,6 @@
 # WhoDoYouKnow
 
-Find out who you actually know from your Gmail. Scans your email threads, identifies real contacts (not newsletters), enriches them with AI, and exports everything to a clean CSV.
+Build a private relationship memory from Gmail. The app scans your threads, stores the people and conversations that matter, lets you add your own context, and uses AI workers to summarize relationships and surface mentor/advisor candidates.
 
 <!-- TODO: Add screenshot -->
 ![Screenshot](public/screenshot.png)
@@ -9,12 +9,13 @@ Find out who you actually know from your Gmail. Scans your email threads, identi
 
 ## Features
 
-- **Gmail scan** — reads your email threads to find people you've actually communicated with
-- **Mutual detection** — optionally filters to only people you've replied to (not just received from)
-- **AI enrichment** — uses OpenRouter to categorize and summarize your relationships
-- **CSV export** — download your network as a spreadsheet
-- **Privacy-first** — emails are processed in-memory only, never stored. Data is deleted within 15 minutes of download
-- **Filters** — date range, mutual-only toggle, domain blocklist, and more
+- **Deep Gmail sync** — reads thread participants, subjects, snippets, and optional full message bodies back to your selected date
+- **Relationship memory** — stores people, contact methods, thread links, raw bodies when enabled, summaries, private notes, and tags in Postgres
+- **AI worker queue** — processes thread summaries, person summaries, and mentor-signal reviews as independent database-backed tasks
+- **Mentor Finder** — ranks professor, advisor, TA, mentor, and high-signal contacts without drafting outreach messages for you
+- **Review sheet** — edit people like a spreadsheet, add phone/social links, confirm mentors, mark friends, and archive noisy senders
+- **CSV exports** — download people, relationship summaries, thread summaries, mentor candidates, notes, tags, and email metadata
+- **Filters** — date range, mutual-only toggle, domain blocklist, raw-body storage, and scan depth
 
 ## Tech Stack
 
@@ -23,11 +24,12 @@ Find out who you actually know from your Gmail. Scans your email threads, identi
 - [Drizzle ORM](https://orm.drizzle.team) + [Neon](https://neon.tech) (PostgreSQL)
 - [Google APIs](https://developers.google.com/gmail/api) (Gmail + People)
 - [OpenRouter](https://openrouter.ai) (AI inference)
-- [Vercel Blob](https://vercel.com/docs/storage/vercel-blob) (CSV storage)
+- [Vercel Blob](https://vercel.com/docs/storage/vercel-blob) (optional CSV storage)
 
 ## Docs
 
 - Human guide: [`docs/HUMANS.md`](docs/HUMANS.md)
+- Mentor OS workflow: [`docs/MENTOR_OS.md`](docs/MENTOR_OS.md)
 - Agent guide: [`docs/AGENTS.md`](docs/AGENTS.md)
 - Product context: [`prd.md`](prd.md), [`design.md`](design.md)
 
@@ -44,7 +46,7 @@ This app uses Gmail's restricted OAuth scopes, which means Google requires an ex
 - A [Neon](https://neon.tech) account (free tier works)
 - A [Google Cloud](https://console.cloud.google.com) account (free)
 - An [OpenRouter](https://openrouter.ai) API key
-- A [Vercel Blob](https://vercel.com/docs/storage/vercel-blob) token (for CSV storage)
+- Optional: a [Vercel Blob](https://vercel.com/docs/storage/vercel-blob) token (for hosted CSV storage)
 
 ### 1. Google Cloud Setup
 
@@ -155,7 +157,7 @@ Open [http://localhost:3000](http://localhost:3000) and click "Get My Network" t
 | `GOOGLE_CLIENT_SECRET` | Yes | OAuth Client Secret from Google Cloud Console |
 | `OPENROUTER_API_KEY` | Yes | API key from [OpenRouter](https://openrouter.ai) |
 | `DATABASE_URL` | Yes | PostgreSQL connection string ([Neon](https://neon.tech) recommended) |
-| `BLOB_READ_WRITE_TOKEN` | Yes | Vercel Blob storage token |
+| `BLOB_READ_WRITE_TOKEN` | No | Vercel Blob storage token; local dev falls back to temp files |
 | `NEXT_PUBLIC_APP_URL` | Yes | Public-facing app URL |
 | `STRIPE_SECRET_KEY` | No | Stripe secret key (only if enabling payments) |
 | `STRIPE_WEBHOOK_SECRET` | No | Stripe webhook secret |

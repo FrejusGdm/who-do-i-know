@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1779315091207,
+      "tag": "0000_hard_beyonder",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1779326295002,
+      "tag": "0001_wise_tag",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1779377911127,
+      "tag": "0002_outgoing_ares",
+      "breakpoints": true
+    }
+  ]
+}

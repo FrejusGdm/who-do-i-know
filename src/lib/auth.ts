@@ -6,12 +6,15 @@ import * as schema from "@/db/schema";
 
 export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL,
-  secret: process.env.BETTER_AUTH_SECRET,
+  secret:
+    process.env.BETTER_AUTH_SECRET ??
+    "development-only-secret-change-me-before-production",
   database: drizzleAdapter(db, { provider: "pg", schema }),
   socialProviders: {
     google: {
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      clientId: process.env.GOOGLE_CLIENT_ID ?? "missing-google-client-id",
+      clientSecret:
+        process.env.GOOGLE_CLIENT_SECRET ?? "missing-google-client-secret",
       scope: [
         "openid",
         "email",

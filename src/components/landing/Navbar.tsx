@@ -2,14 +2,23 @@
 
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { signIn } from "@/lib/auth-client";
+import { signIn, useSession } from "@/lib/auth-client";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 export function Navbar() {
+  const { data: session } = useSession();
+  const router = useRouter();
+
   const handleGetStarted = () => {
+    if (session) {
+      router.push("/dashboard");
+      return;
+    }
+
     signIn.social({
       provider: "google",
-      callbackURL: "/connect",
+      callbackURL: "/dashboard",
     });
   };
 
@@ -33,7 +42,7 @@ export function Navbar() {
           onClick={handleGetStarted}
           className="bg-[--brand-ink] text-[--brand-cream] hover:bg-black/80 rounded-full font-medium px-6"
         >
-          Connect
+          {session ? "Dashboard" : "Open app"}
         </Button>
       </div>
     </motion.nav>

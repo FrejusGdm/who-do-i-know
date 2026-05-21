@@ -5,11 +5,29 @@ export interface ThreadMeta {
   threadId: string;
   senderEmail: string;
   senderName: string;
+  participants: ParticipantMeta[];
   subjectSnippet: string;
   userReplied: boolean;
   messageCount: number;
   lastDate: string;
   bodySnippets: string[];
+  messages: MessageMeta[];
+}
+
+export interface ParticipantMeta {
+  email: string;
+  name: string;
+}
+
+export interface MessageMeta {
+  messageId: string;
+  senderEmail: string;
+  senderName: string;
+  recipients: string[];
+  subject: string;
+  sentAt: string;
+  snippet: string;
+  body: string;
 }
 
 export interface SenderRecord {
@@ -19,6 +37,7 @@ export interface SenderRecord {
   lastContact: string;
   subjectSnippets: string[];
   bodySnippets: string[];
+  threads: ThreadMeta[];
 }
 
 function parseEmailAddress(raw: string): { name: string; email: string } {
@@ -26,9 +45,43 @@ function parseEmailAddress(raw: string): { name: string; email: string } {
   if (match)
     return {
       name: match[1].replace(/"/g, "").trim(),
-      email: match[2].trim(),
+      email: match[2].trim().toLowerCase(),
     };
-  return { name: raw, email: raw };
+  return { name: raw, email: raw.trim().toLowerCase() };
+}
+
+function parseAddressList(raw: string): ParticipantMeta[] {
+  if (!raw) return [];
+  return raw
+    .split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/)
+    .map((value) => parseEmailAddress(value.trim()))
+    .filter((value) => value.email && value.email.includes("@"));
+}
+
+function parseEmailList(raw: string): string[] {
+  return parseAddressList(raw).map((value) => value.email);
+}
+
+function parseHeaderDate(raw: string): string {
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString();
+}
+
+function isUserAddress(email: string, userEmail: string): boolean {
+  return email.toLowerCase() === userEmail.toLowerCase();
+}
+
+function isLikelyAutomatedAddress(email: string): boolean {
+  return /(^|[-_.])(no-?reply|donotreply|mailer-daemon|notification|notifications)([-_.]|@)/i.test(email);
+}
+
+function dedupeParticipants(participants: ParticipantMeta[]): ParticipantMeta[] {
+  const byEmail = new Map<string, ParticipantMeta>();
+  for (const participant of participants) {
+    if (!participant.email || byEmail.has(participant.email)) continue;
+    byEmail.set(participant.email, participant);
+  }
+  return Array.from(byEmail.values());
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -135,29 +188,41 @@ export async function fetchMutualThreads(
   const profile = await gmail.users.getProfile({ userId: "me" });
   const userEmail = profile.data.emailAddress!;
   const q = buildQuery(filters);
+  const maxThreads = filters.maxThreads ?? 500;
 
-  const threadList = await gmail.users.threads.list({
-    userId: "me",
-    q,
-    maxResults: Math.min(filters.maxThreads ?? 500, 500),
-  });
+  // ── Fetch thread IDs with pagination ──
+  const allThreadIds: { id: string }[] = [];
+  let pageToken: string | undefined;
+  do {
+    const res = await gmail.users.threads.list({
+      userId: "me",
+      q,
+      maxResults: Math.min(500, maxThreads - allThreadIds.length),
+      pageToken,
+    });
+    const threads = res.data.threads ?? [];
+    for (const t of threads) {
+      if (t.id) allThreadIds.push({ id: t.id });
+    }
+    pageToken = res.data.nextPageToken ?? undefined;
+  } while (pageToken && allThreadIds.length < maxThreads);
 
-  const threads = threadList.data.threads ?? [];
-  onProgress?.("fetch", threads.length);
+  onProgress?.("fetch", allThreadIds.length);
 
-  // ── Pass 1: Fast metadata scan to identify qualifying threads ──
+  // ── Pass 1: Fast metadata scan ──
   const BATCH_SIZE = 20;
   const results: ThreadMeta[] = [];
+  const requireReply = filters.requireReply ?? false;
 
-  for (let i = 0; i < threads.length; i += BATCH_SIZE) {
-    const batch = threads.slice(i, i + BATCH_SIZE);
+  for (let i = 0; i < allThreadIds.length; i += BATCH_SIZE) {
+    const batch = allThreadIds.slice(i, i + BATCH_SIZE);
     const metas = await Promise.all(
       batch.map((t) =>
         gmail.users.threads.get({
           userId: "me",
-          id: t.id!,
+          id: t.id,
           format: "metadata",
-          metadataHeaders: ["From", "Subject", "Date"],
+          metadataHeaders: ["From", "To", "Cc", "Bcc", "Subject", "Date"],
         })
       )
     );
@@ -169,20 +234,26 @@ export async function fetchMutualThreads(
       let subjectSnippet = "";
       let senderEmail = "";
       let senderName = "";
+      const participants: ParticipantMeta[] = [];
 
       for (const msg of msgs) {
         const headers = msg.payload?.headers ?? [];
         const from = headers.find((h) => h.name === "From")?.value ?? "";
+        const to = headers.find((h) => h.name === "To")?.value ?? "";
+        const cc = headers.find((h) => h.name === "Cc")?.value ?? "";
+        const bcc = headers.find((h) => h.name === "Bcc")?.value ?? "";
         const subject =
           headers.find((h) => h.name === "Subject")?.value ?? "";
         const date = headers.find((h) => h.name === "Date")?.value ?? "";
+        const parsedFrom = parseEmailAddress(from);
 
-        if (from.includes(userEmail)) {
+        participants.push(parsedFrom, ...parseAddressList(to), ...parseAddressList(cc), ...parseAddressList(bcc));
+
+        if (isUserAddress(parsedFrom.email, userEmail)) {
           userReplied = true;
         } else {
-          const parsed = parseEmailAddress(from);
-          senderEmail = parsed.email;
-          senderName = parsed.name;
+          senderEmail = parsedFrom.email;
+          senderName = parsedFrom.name;
         }
 
         if (subject && !subjectSnippet) {
@@ -191,29 +262,60 @@ export async function fetchMutualThreads(
         if (date) lastDate = date;
       }
 
-      if (!userReplied || !senderEmail) continue;
-      if (msgs.length < (filters.minInteractions ?? 2)) continue;
+      // Skip if no sender found
+      const externalParticipants = dedupeParticipants(participants).filter(
+        (participant) =>
+          !isUserAddress(participant.email, userEmail) &&
+          !isLikelyAutomatedAddress(participant.email)
+      );
+      if (!senderEmail && externalParticipants.length === 0) continue;
+      // Skip if reply required but user didn't reply
+      if (requireReply && !userReplied) continue;
 
       results.push({
         threadId: meta.data.id!,
-        senderEmail,
-        senderName,
+        senderEmail: senderEmail || externalParticipants[0]?.email || "",
+        senderName: senderName || externalParticipants[0]?.name || "",
+        participants: externalParticipants,
         subjectSnippet,
         userReplied,
         messageCount: msgs.length,
         lastDate,
         bodySnippets: [],
+        messages: [],
       });
     }
 
     onProgress?.("filter", results.length);
   }
 
-  // ── Pass 2: Fetch full bodies only for qualifying threads ──
-  onProgress?.("enrich", results.length);
+  // ── Group by every non-user participant, not just the last inbound sender ──
+  const bySender = new Map<string, { participant: ParticipantMeta; threads: ThreadMeta[] }>();
+  for (const t of results) {
+    for (const participant of t.participants) {
+      const existing = bySender.get(participant.email) ?? { participant, threads: [] };
+      bySender.set(participant.email, {
+        participant: existing.participant,
+        threads: [...existing.threads, t],
+      });
+    }
+  }
 
-  for (let i = 0; i < results.length; i += BATCH_SIZE) {
-    const batch = results.slice(i, i + BATCH_SIZE);
+  // ── Apply minInteractions per-sender (total emails across all threads) ──
+  const minInteractions = filters.minInteractions ?? 2;
+  const qualifiedSenders = Array.from(bySender.entries()).filter(
+    ([, value]) => value.threads.reduce((sum, t) => sum + t.messageCount, 0) >= minInteractions
+  );
+
+  // ── Pass 2: Fetch full bodies only for qualifying threads ──
+  const qualifiedThreadIds = new Set(
+    qualifiedSenders.flatMap(([, value]) => value.threads.map((t) => t.threadId))
+  );
+  const threadsToEnrich = results.filter((t) => qualifiedThreadIds.has(t.threadId));
+  onProgress?.("enrich", qualifiedSenders.length);
+
+  for (let i = 0; i < threadsToEnrich.length; i += BATCH_SIZE) {
+    const batch = threadsToEnrich.slice(i, i + BATCH_SIZE);
     const fullThreads = await Promise.all(
       batch.map((t) =>
         gmail.users.threads.get({
@@ -227,35 +329,52 @@ export async function fetchMutualThreads(
     for (let j = 0; j < fullThreads.length; j++) {
       const msgs = fullThreads[j].data.messages ?? [];
       const snippets: string[] = [];
+      const messages: MessageMeta[] = [];
 
       for (const msg of msgs) {
-        if (snippets.length >= 3) break;
-        const from = msg.payload?.headers?.find((h) => h.name === "From")?.value ?? "";
-        // Only extract body from the other person's messages, not the user's
-        if (from.includes(userEmail)) continue;
+        const headers = msg.payload?.headers ?? [];
+        const from = headers.find((h) => h.name === "From")?.value ?? "";
+        const to = headers.find((h) => h.name === "To")?.value ?? "";
+        const cc = headers.find((h) => h.name === "Cc")?.value ?? "";
+        const bcc = headers.find((h) => h.name === "Bcc")?.value ?? "";
+        const subject = headers.find((h) => h.name === "Subject")?.value ?? "";
+        const date = headers.find((h) => h.name === "Date")?.value ?? "";
+        const parsedFrom = parseEmailAddress(from);
         const bodyText = extractBodyText(msg.payload);
+        const snippet = bodyText.substring(0, 500);
+
+        if (msg.id) {
+          messages.push({
+            messageId: msg.id,
+            senderEmail: parsedFrom.email,
+            senderName: parsedFrom.name,
+            recipients: [...parseEmailList(to), ...parseEmailList(cc), ...parseEmailList(bcc)],
+            subject,
+            sentAt: parseHeaderDate(date),
+            snippet,
+            body: bodyText,
+          });
+        }
+
+        if (snippets.length >= 3) continue;
+        if (isUserAddress(parsedFrom.email, userEmail)) continue;
         if (bodyText) {
-          snippets.push(bodyText.substring(0, 500));
+          snippets.push(snippet);
         }
       }
 
       batch[j].bodySnippets = snippets;
+      batch[j].messages = messages;
     }
   }
 
-  // ── Group by sender ──
-  const bySender = new Map<string, ThreadMeta[]>();
-  for (const t of results) {
-    const existing = bySender.get(t.senderEmail) ?? [];
-    bySender.set(t.senderEmail, [...existing, t]);
-  }
-
-  return Array.from(bySender.entries()).map(([email, ts]) => ({
+  return qualifiedSenders.map(([email, value]) => ({
     email,
-    name: ts[0].senderName,
-    totalEmails: ts.reduce((sum, t) => sum + t.messageCount, 0),
-    lastContact: ts[ts.length - 1].lastDate,
-    subjectSnippets: ts.map((t) => t.subjectSnippet).slice(0, 5),
-    bodySnippets: ts.flatMap((t) => t.bodySnippets).slice(0, 3),
+    name: value.participant.name,
+    totalEmails: value.threads.reduce((sum, t) => sum + t.messageCount, 0),
+    lastContact: value.threads[value.threads.length - 1].lastDate,
+    subjectSnippets: value.threads.map((t) => t.subjectSnippet).slice(0, 5),
+    bodySnippets: value.threads.flatMap((t) => t.bodySnippets).slice(0, 3),
+    threads: value.threads,
   }));
 }

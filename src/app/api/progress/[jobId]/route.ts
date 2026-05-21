@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { getProgress } from "@/lib/pipeline";
+import { requireSession, requireJobOwnership } from "@/lib/auth-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -8,6 +9,12 @@ export async function GET(
   { params }: { params: Promise<{ jobId: string }> }
 ) {
   const { jobId } = await params;
+
+  const { session, error: authErr } = await requireSession();
+  if (authErr) return authErr;
+
+  const { error: jobErr } = await requireJobOwnership(jobId, session.user.email);
+  if (jobErr) return jobErr;
 
   const encoder = new TextEncoder();
   let lastIndex = 0;

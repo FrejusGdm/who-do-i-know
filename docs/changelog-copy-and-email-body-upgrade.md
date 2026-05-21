@@ -2,6 +2,12 @@
 
 **Date:** 2026-03-21
 
+> Updated 2026-05-20: this note describes the older one-shot body-snippet flow.
+> The current product can store full raw message bodies in the user's private
+> database when full-context processing is enabled. See `docs/HUMANS.md` for the
+> relationship-memory pipeline and `src/app/privacy/page.tsx` for the current
+> user-facing data handling copy.
+
 ## What Changed
 
 ### 1. Gmail now reads full email bodies (not just metadata)
@@ -14,11 +20,10 @@
 - Prefers `text/plain` parts, falls back to stripped HTML
 - Body snippets are passed alongside existing metadata to the LLM
 
-**Privacy implications:**
-- Email bodies are processed in-memory only — never written to disk, logged, or stored in any database
-- Bodies are sent to AI providers (via OpenRouter) for one-time inference, then discarded
-- OpenAI and Anthropic (the models behind OpenRouter) have stated that API data is not used for training
-- We disclaim responsibility for third-party provider policy changes in our privacy policy
+**Historical privacy implications:**
+- At the time, email bodies were processed in-memory only and not stored.
+- This is superseded by the current relationship-memory design, where raw bodies can be stored for later summarization and reprocessing.
+- Bodies may be sent to AI providers during Cloud or BYOK processing. Local/Ollama processing keeps inference on the local machine.
 
 ### 2. Connect page copy rewritten (reassuring & minimal tone)
 
@@ -29,7 +34,7 @@
 
 **New copy:**
 - "Read-only Gmail access / We scan your emails to understand your relationships — then delete everything."
-- "Processed, never saved / Your data passes through AI once and is permanently deleted. Nothing is stored or used for training."
+- "Processed, never saved / Your data passes through AI once and is permanently deleted. Nothing is stored or used for training." (historical copy; no longer accurate for full-context relationship memory)
 - "No modifications / We can't send emails, delete messages, or change anything."
 
 **Why the change:** The old copy was technically accurate but misleading now that we read bodies. The new copy is honest about reading emails while being reassuring about what happens to the data.
@@ -37,7 +42,7 @@
 ### 3. Privacy policy updated
 
 - "Data We Process" section now mentions message content alongside metadata
-- "Data We Never Store" section clarifies bodies are processed in-memory but never persisted
+- "Data We Never Store" section clarified bodies were processed in-memory but never persisted at that time; current privacy copy supersedes this
 - Third parties section: removed Stripe reference (app is free), updated OpenRouter description to mention OpenAI/Anthropic no-training policies with a disclaimer
 
 ### 4. Terms of Service updated

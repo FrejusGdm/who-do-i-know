@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { eq, and } from "drizzle-orm";
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
 import { db } from "@/db";
 import { jobs, account } from "@/db/schema";
 import { runCloudPipeline } from "@/lib/pipeline";
+import { requireSession } from "@/lib/auth-guard";
 import type { FilterConfig, LLMProviderMode, BYOKProvider } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -12,10 +11,8 @@ export const maxDuration = 300;
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await auth.api.getSession({ headers: await headers() });
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const { session, error: authErr } = await requireSession();
+    if (authErr) return authErr;
 
     const { filterConfig, providerMode, byokApiKey, ollamaModel, byokProvider } = await req.json();
 
@@ -49,6 +46,7 @@ export async function POST(req: NextRequest) {
         try {
           await runCloudPipeline(
             job.id,
+            session.user.id,
             googleAccount.accessToken!,
             filterConfig as FilterConfig,
             session.user.email,

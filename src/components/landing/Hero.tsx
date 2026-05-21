@@ -4,16 +4,24 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { HeroBackground } from "./HeroBackground";
-import { signIn } from "@/lib/auth-client";
+import { signIn, useSession } from "@/lib/auth-client";
+import { useRouter } from "next/navigation";
 
 export function Hero() {
   const [isLoading, setIsLoading] = useState(false);
+  const { data: session } = useSession();
+  const router = useRouter();
 
   const handleGetStarted = () => {
+    if (session) {
+      router.push("/dashboard");
+      return;
+    }
+
     setIsLoading(true);
     signIn.social({
       provider: "google",
-      callbackURL: "/connect",
+      callbackURL: "/dashboard",
     });
   };
 
@@ -57,9 +65,8 @@ export function Hero() {
           transition={{ delay: (text1.length + text2.length) * 0.03 + 1, duration: 0.6 }}
           className="text-lg md:text-xl text-[--brand-muted] mb-12 max-w-2xl mx-auto font-light"
         >
-          Connect your Gmail. We scan your history, find every real person
-          you&apos;ve ever interacted with, and hand you a clean spreadsheet.
-          100% free.
+          Connect Gmail, build a private relationship memory, and keep a
+          searchable CRM with summaries, notes, exports, and outreach prompts.
         </motion.p>
 
         <motion.div
@@ -80,7 +87,7 @@ export function Hero() {
                 Connecting...
               </span>
             ) : (
-              "Get My Network — Free"
+              session ? "Open Dashboard" : "Open Relationship Memory"
             )}
           </Button>
           <p className="text-sm text-[--brand-muted]/60 flex items-center justify-center gap-1.5">

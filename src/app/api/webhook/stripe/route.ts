@@ -1,8 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
+import { eq, and } from "drizzle-orm";
 import { stripe } from "@/lib/stripe";
 import { db } from "@/db";
-import { jobs } from "@/db/schema";
+import { jobs, account, user } from "@/db/schema";
+import { runCloudPipeline } from "@/lib/pipeline";
 import type Stripe from "stripe";
+import type { FilterConfig, LLMProviderMode } from "@/types";
 
 export const dynamic = "force-dynamic";
 
@@ -53,16 +56,48 @@ export async function POST(req: NextRequest) {
       })
       .returning();
 
-    const processUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/process`;
-    fetch(processUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jobId: job.id,
-        stripeSessionId: session.id,
-        byokApiKey: metadata.byokApiKey || undefined,
-      }),
-    }).catch((e) => console.error("Failed to trigger processing:", e));
+    // Run pipeline directly via after() instead of HTTP fetch to /api/process
+    after(async () => {
+      try {
+        const [owner] = await db
+          .select()
+          .from(user)
+          .where(eq(user.email, metadata.userEmail))
+          .limit(1);
+
+        if (!owner) {
+          console.error("[Webhook] User not found for pipeline:", metadata.userEmail);
+          return;
+        }
+
+        const [googleAccount] = await db
+          .select()
+          .from(account)
+          .where(
+            and(
+              eq(account.userId, owner.id),
+              eq(account.providerId, "google")
+            )
+          )
+          .limit(1);
+
+        if (!googleAccount?.accessToken) {
+          console.error("[Webhook] No Google access token for user");
+          return;
+        }
+
+        await runCloudPipeline(
+          job.id,
+          owner.id,
+          googleAccount.accessToken,
+          JSON.parse(metadata.filterConfig) as FilterConfig,
+          metadata.userEmail,
+          (metadata.providerMode ?? "cloud") as LLMProviderMode
+        );
+      } catch (e) {
+        console.error("[Webhook] Pipeline error:", e);
+      }
+    });
   }
 
   return NextResponse.json({ received: true });

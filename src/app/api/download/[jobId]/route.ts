@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readFileSync, existsSync } from "fs";
-import { eq } from "drizzle-orm";
-import { db } from "@/db";
-import { jobs } from "@/db/schema";
+import { resolve } from "path";
+import { tmpdir } from "os";
 import { cleanupBlob } from "@/lib/pipeline";
+import { requireSession, requireJobOwnership } from "@/lib/auth-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -13,15 +13,12 @@ export async function GET(
 ) {
   try {
     const { jobId } = await params;
-    const [job] = await db
-      .select()
-      .from(jobs)
-      .where(eq(jobs.id, jobId))
-      .limit(1);
 
-    if (!job) {
-      return NextResponse.json({ error: "Job not found" }, { status: 404 });
-    }
+    const { session, error: authErr } = await requireSession();
+    if (authErr) return authErr;
+
+    const { job, error: jobErr } = await requireJobOwnership(jobId, session.user.email);
+    if (jobErr) return jobErr;
 
     if (job.status !== "complete" || !job.blobUrl) {
       return NextResponse.json(
@@ -30,23 +27,28 @@ export async function GET(
       );
     }
 
-    await db
-      .update(jobs)
-      .set({ downloadedAt: new Date() })
-      .where(eq(jobs.id, jobId));
-
     const isLocalFile = !job.blobUrl.startsWith("http");
     const wantsFile = req.nextUrl.searchParams.get("file") === "true";
 
     // Serve local CSV files directly as a download
     if (isLocalFile && wantsFile) {
-      if (!existsSync(job.blobUrl)) {
+      // Path confinement: ensure blobUrl is within the temp directory
+      const resolvedPath = resolve(job.blobUrl);
+      const allowedDir = resolve(tmpdir());
+      if (!resolvedPath.startsWith(allowedDir + "/")) {
+        return NextResponse.json(
+          { error: "Invalid file path" },
+          { status: 403 }
+        );
+      }
+
+      if (!existsSync(resolvedPath)) {
         return NextResponse.json(
           { error: "File no longer available" },
           { status: 410 }
         );
       }
-      const csvContent = readFileSync(job.blobUrl, "utf-8");
+      const csvContent = readFileSync(resolvedPath, "utf-8");
       const date = new Date().toISOString().split("T")[0];
       return new Response(csvContent, {
         headers: {

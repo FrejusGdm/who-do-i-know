@@ -33,13 +33,13 @@ export default function ConnectPage() {
       icon: Mail,
       label: "Read-only Gmail access",
       detail:
-        "We scan your emails to understand your relationships — then delete everything.",
+        "We scan your emails to understand your relationships and store structured relationship memory.",
     },
     {
       icon: Shield,
-      label: "Processed, never saved",
+      label: "Private by default",
       detail:
-        "Your data passes through AI once and is permanently deleted. Nothing is stored or used for training.",
+        "Full message bodies can be stored in your private database for deeper summaries, search, and later reprocessing.",
     },
     {
       icon: Users,
@@ -90,7 +90,7 @@ export default function ConnectPage() {
             size="lg"
             className="w-full bg-[--brand-ink] text-[--brand-cream] hover:bg-black/80 rounded-full text-lg py-7 font-medium transition-all duration-300 shadow-xl"
           >
-            Configure Your Scan
+            Sync Gmail
           </Button>
         </Link>
       </motion.div>

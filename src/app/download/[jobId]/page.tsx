@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { DownloadCard } from "@/components/processing/DownloadCard";
+import { AppNav } from "@/components/AppNav";
 import { AlertCircle } from "lucide-react";
 
 export default function DownloadPage() {
@@ -61,6 +62,7 @@ export default function DownloadPage() {
   if (loading) {
     return (
       <main className="min-h-screen flex items-center justify-center bg-[--brand-cream]">
+        <AppNav />
         <div className="animate-pulse text-[--brand-muted]">Loading...</div>
       </main>
     );
@@ -69,6 +71,7 @@ export default function DownloadPage() {
   if (error) {
     return (
     <main className="min-h-screen flex items-center justify-center bg-[--brand-cream] px-6">
+        <AppNav />
         <div className="max-w-md text-center p-8 bg-white/50 backdrop-blur-sm border border-black/5 rounded-3xl shadow-sm">
           <AlertCircle className="w-12 h-12 text-[--brand-ink] mx-auto mb-6" strokeWidth={1.5} />
           <h1 className="font-serif text-3xl font-medium mb-3 text-[--brand-ink]">
@@ -84,7 +87,8 @@ export default function DownloadPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-[--brand-cream] px-6 py-12">
+    <main className="min-h-screen flex items-center justify-center bg-[--brand-cream] px-6 py-24">
+      <AppNav />
       <DownloadCard
         contactCount={contactCount}
         downloadUrl={downloadUrl}

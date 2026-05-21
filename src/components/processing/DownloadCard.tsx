@@ -1,7 +1,8 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Download, Share2, CheckCircle } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, Download, Share2, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ContactRow } from "@/types";
 
@@ -91,17 +92,23 @@ export function DownloadCard({
           Download CSV
         </Button>
 
+        <Link
+          href="/dashboard"
+          className="mb-6 inline-flex h-12 w-full items-center justify-center gap-2 border border-neutral-300 bg-white text-sm font-medium text-neutral-800 hover:border-neutral-950 hover:text-neutral-950"
+        >
+          Back to dashboard
+          <ArrowRight className="h-4 w-4" />
+        </Link>
+
         <div className="text-center space-y-6">
           <p className="text-sm font-medium text-[--brand-muted] bg-white/50 backdrop-blur-sm border border-black/5 rounded-full py-2 px-4 inline-block shadow-sm">
             {isLocal
               ? "Your data never left your device."
-              : `Your data has been deleted from our servers.${downloadedAt ? ` Downloaded at ${downloadedAt}.` : ""}`}
+              : `Your relationship memory is saved in your private dashboard.${downloadedAt ? ` CSV downloaded at ${downloadedAt}.` : ""}`}
           </p>
 
           <div className="pt-6 border-t border-black/5">
-            <p className="text-sm text-[--brand-muted] mb-3">
-              Know someone graduating?
-            </p>
+            <p className="text-sm text-[--brand-muted] mb-3">Share the app</p>
             <Button
               variant="outline"
               size="sm"

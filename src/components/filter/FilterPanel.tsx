@@ -34,12 +34,7 @@ interface FilterPanelProps {
 }
 
 export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
-  const fourYearsAgo = new Date();
-  fourYearsAgo.setFullYear(fourYearsAgo.getFullYear() - 4);
-
-  const [afterDate, setAfterDate] = useState(
-    fourYearsAgo.toISOString().split("T")[0]
-  );
+  const [afterDate, setAfterDate] = useState("2022-08-01");
   const [blockedDomains, setBlockedDomains] = useState<string[]>(
     DEFAULT_BLOCKED_DOMAINS
   );
@@ -48,8 +43,10 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
   const [skipUpdates, setSkipUpdates] = useState(true);
   const [skipSocial, setSkipSocial] = useState(true);
   const [skipForums, setSkipForums] = useState(true);
-  const [minInteractions, setMinInteractions] = useState(2);
-  const [maxThreads] = useState(500);
+  const [minInteractions, setMinInteractions] = useState(1);
+  const [requireReply, setRequireReply] = useState(false);
+  const [storeRawBodies, setStoreRawBodies] = useState(true);
+  const [maxThreads, setMaxThreads] = useState(100000);
   const [providerMode, setProviderMode] = useState<LLMProviderMode>("local");
   const [byokApiKey, setByokApiKey] = useState("");
   const [byokProvider, setByokProvider] = useState<BYOKProvider>("openai");
@@ -74,7 +71,9 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
     skipForums,
     minInteractions,
     maxThreads,
-  }), [afterDate, blockedDomains, skipPromotions, skipUpdates, skipSocial, skipForums, minInteractions, maxThreads]);
+    requireReply,
+    storeRawBodies,
+  }), [afterDate, blockedDomains, skipPromotions, skipUpdates, skipSocial, skipForums, minInteractions, maxThreads, requireReply, storeRawBodies]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -135,12 +134,7 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
   };
 
   const handleInitialSubmit = () => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    setTeaseState("scanning");
-    // Simulate a deep scan to build anticipation
-    setTimeout(() => {
-      setTeaseState("teased");
-    }, 2800);
+    handleFinalSubmit();
   };
 
   const handleFinalSubmit = () => {
@@ -341,6 +335,41 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
         </div>
       </section>
 
+      {/* Reply Filter */}
+      <section className="p-8 bg-white/50 backdrop-blur-sm rounded-3xl border border-black/5">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-serif text-2xl text-[--brand-ink] mb-1">Only People I Replied To</h2>
+            <p className="text-sm text-[--brand-muted]">
+              {requireReply
+                ? "Strict — only includes contacts you actively replied to"
+                : "Includes everyone who emailed you (recommended)"}
+            </p>
+          </div>
+          <Switch
+            checked={requireReply}
+            onCheckedChange={setRequireReply}
+          />
+        </div>
+      </section>
+
+      <section className="p-8 bg-white/50 backdrop-blur-sm rounded-3xl border border-black/5">
+        <div className="flex items-center justify-between gap-6">
+          <div>
+            <h2 className="font-serif text-2xl text-[--brand-ink] mb-1">Store Full Email Bodies</h2>
+            <p className="text-sm text-[--brand-muted]">
+              {storeRawBodies
+                ? "Enabled — better future summaries, search, and reprocessing."
+                : "Disabled — only snippets, metadata, and summaries are saved."}
+            </p>
+          </div>
+          <Switch
+            checked={storeRawBodies}
+            onCheckedChange={setStoreRawBodies}
+          />
+        </div>
+      </section>
+
       {/* Min Interactions */}
       <section className="p-8 bg-white/50 backdrop-blur-sm rounded-3xl border border-black/5">
         <h2 className="font-serif text-2xl text-[--brand-ink] mb-2">Minimum Interactions</h2>
@@ -359,6 +388,25 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
         <div className="flex justify-between text-xs text-[--brand-muted] font-medium">
           <span>1 (everyone)</span>
           <span>5 (close contacts only)</span>
+        </div>
+      </section>
+
+      <section className="p-8 bg-white/50 backdrop-blur-sm rounded-3xl border border-black/5">
+        <h2 className="font-serif text-2xl text-[--brand-ink] mb-2">Scan Depth</h2>
+        <p className="text-sm text-[--brand-muted] mb-8">
+          Scan all matching Gmail threads since the selected date by default. Lower this only if you need a faster test run.
+        </p>
+        <Slider
+          value={[maxThreads]}
+          onValueChange={([v]) => setMaxThreads(v)}
+          min={500}
+          max={100000}
+          step={5000}
+          className="mb-4"
+        />
+        <div className="flex justify-between text-xs text-[--brand-muted] font-medium">
+          <span>500</span>
+          <span>{maxThreads >= 100000 ? "All" : maxThreads}</span>
         </div>
       </section>
 
@@ -590,7 +638,7 @@ export function FilterPanel({ onSubmit, isSubmitting }: FilterPanelProps) {
           }
           className="w-full bg-[--brand-ink] text-[--brand-cream] hover:bg-black/80 text-lg py-7 rounded-full font-medium transition-all duration-300 shadow-xl"
         >
-          {isSubmitting ? "Processing..." : "Scan Inbox & Continue"}
+          {isSubmitting ? "Processing..." : "Sync Gmail & Build Memory"}
         </Button>
         <button 
           onClick={() => {

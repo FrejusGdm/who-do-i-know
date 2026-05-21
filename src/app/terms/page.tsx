@@ -6,7 +6,7 @@ export default function TermsPage() {
           Terms of Service
         </h1>
         <p className="text-lg font-light text-[--brand-muted] mb-16">
-          Last updated: January 2026
+          Last updated: May 2026
         </p>
 
         <div className="space-y-12 text-[--brand-muted] leading-relaxed">
@@ -15,7 +15,7 @@ export default function TermsPage() {
               Service
             </h2>
             <p className="text-lg">
-              WhoDoYouKnow provides a one-time personal contact extraction
+              WhoDoYouKnow provides a private personal relationship-memory
               service. By using this service, you agree to these terms.
             </p>
           </section>
@@ -49,10 +49,11 @@ export default function TermsPage() {
               Data Handling
             </h2>
             <p className="text-lg">
-              We process email metadata in memory only. Email bodies are never
-              accessed, stored, or sent to any external service. All data is
-              deleted within 15 minutes of download. See our Privacy Policy for
-              full details.
+              We process Gmail metadata and, when enabled, full message bodies
+              to build relationship summaries, private notes, exports, and
+              mentor-signal rankings. Stored relationship memory remains in the
+              database until you delete it or request deletion. See our Privacy
+              Policy for full details.
             </p>
           </section>
 

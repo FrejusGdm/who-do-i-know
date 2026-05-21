@@ -6,13 +6,19 @@ const HEADERS = [
   "relationship_type",
   "how_we_met",
   "interaction_summary",
+  "notable_advice",
+  "personal_details",
+  "open_loops",
+  "why_they_matter",
+  "reconnect_reason",
   "last_contact",
   "total_emails",
   "confidence",
   "tags",
 ];
 
-function escapeField(value: string | number | string[]): string {
+function escapeField(value: string | number | string[] | undefined): string {
+  if (value === undefined) return "";
   const str = Array.isArray(value) ? value.join("; ") : String(value);
   if (str.includes(",") || str.includes('"') || str.includes("\n")) {
     return `"${str.replace(/"/g, '""')}"`;

@@ -21,7 +21,8 @@ This is a monolith — all frontend and backend logic lives in one Next.js app. 
 - **Drizzle ORM** for all DB access. Schema in `src/db/schema.ts`. Only stores job metadata — never email content.
 - **All service clients (DB, Stripe, Resend) use lazy initialization** via Proxy to avoid build-time errors when env vars aren't set.
 - **All API routes use `export const dynamic = "force-dynamic"`** to prevent Next.js from trying to pre-render them at build time.
-- **Three LLM modes**: Cloud (OpenRouter server-side), Local (Ollama client-side), BYOK (user's own API key).
+- **Three LLM modes**: Local (Ollama client-side, recommended), BYOK (user's own API key), and Cloud (OpenRouter server-side, currently marked Coming Soon).
+- **Checkout Bypassed**: The application is currently 100% free. The `/checkout` route and Stripe webhooks remain in the codebase but are bypassed. Users are routed from `/filter` directly to `/processing` via the new `POST /api/job` endpoint.
 
 ### Key gotchas
 

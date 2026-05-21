@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { ProgressStages } from "./ProgressStages";
 import { AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AppNav } from "@/components/AppNav";
 
 interface ProgressData {
   stage: string;
@@ -178,6 +179,7 @@ export function ProcessingContent() {
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-[--brand-cream] px-6">
+      <AppNav />
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}

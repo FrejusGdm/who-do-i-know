@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq, and } from "drizzle-orm";
 import { db } from "@/db";
-import { jobs, account, user } from "@/db/schema";
+import { account, user } from "@/db/schema";
 import { runCloudPipeline } from "@/lib/pipeline";
+import { requireSession, requireJobOwnership } from "@/lib/auth-guard";
 import type { FilterConfig, LLMProviderMode } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -11,18 +12,13 @@ export const maxDuration = 300;
 
 export async function POST(req: NextRequest) {
   try {
+    const { session, error: authErr } = await requireSession();
+    if (authErr) return authErr;
+
     const { jobId, byokApiKey, ollamaModel } = await req.json();
 
-    // Look up the job — no session needed since /api/job already authenticated
-    const [job] = await db
-      .select()
-      .from(jobs)
-      .where(eq(jobs.id, jobId))
-      .limit(1);
-
-    if (!job) {
-      return NextResponse.json({ error: "Job not found" }, { status: 404 });
-    }
+    const { job, error: jobErr } = await requireJobOwnership(jobId, session.user.email);
+    if (jobErr) return jobErr;
 
     // Find the Google access token via the job's userEmail
     const [owner] = await db
@@ -56,6 +52,7 @@ export async function POST(req: NextRequest) {
 
     runCloudPipeline(
       jobId,
+      owner.id,
       accessToken,
       job.filterConfig as FilterConfig,
       job.userEmail,

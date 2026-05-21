@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
-import { db } from "@/db";
-import { jobs } from "@/db/schema";
+import { requireSession, requireJobOwnership } from "@/lib/auth-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -11,15 +9,12 @@ export async function GET(
 ) {
   try {
     const { jobId } = await params;
-    const [job] = await db
-      .select()
-      .from(jobs)
-      .where(eq(jobs.id, jobId))
-      .limit(1);
 
-    if (!job) {
-      return NextResponse.json({ error: "Job not found" }, { status: 404 });
-    }
+    const { session, error: authErr } = await requireSession();
+    if (authErr) return authErr;
+
+    const { job, error: jobErr } = await requireJobOwnership(jobId, session.user.email);
+    if (jobErr) return jobErr;
 
     return NextResponse.json({
       id: job.id,

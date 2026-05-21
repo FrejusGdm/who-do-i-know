@@ -7,6 +7,8 @@ export interface FilterConfig {
   skipForums: boolean;
   minInteractions: number;
   maxThreads: number;
+  requireReply?: boolean;
+  storeRawBodies?: boolean;
 }
 
 export interface ContactRow {
@@ -15,11 +17,25 @@ export interface ContactRow {
   relationship_type:
     | "classmate"
     | "professor"
+    | "teaching_assistant"
+    | "student"
+    | "mentor"
+    | "advisor"
+    | "recruiter"
+    | "colleague"
     | "professional"
     | "friend"
-    | "other";
+    | "weak_tie"
+    | "family"
+    | "other"
+    | "unknown";
   how_we_met: string;
   interaction_summary: string;
+  notable_advice?: string;
+  personal_details?: string;
+  open_loops?: string;
+  why_they_matter?: string;
+  reconnect_reason?: string;
   last_contact: string;
   total_emails: number;
   confidence: "high" | "medium" | "low";
