@@ -1,11 +1,13 @@
 import Link from "next/link";
-import { Download, Home, Radar, TableProperties, Users } from "lucide-react";
+import { Archive, Database, Download, Home, Radar, TableProperties, Users } from "lucide-react";
 
 const links = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
   { href: "/people", label: "People", icon: Users },
   { href: "/outreach", label: "Mentors", icon: Radar },
   { href: "/review", label: "Review", icon: TableProperties },
+  { href: "/archive", label: "Archive", icon: Archive },
+  { href: "/imports/linkedin", label: "Import", icon: Database },
   { href: "/exports", label: "Exports", icon: Download },
 ];
 

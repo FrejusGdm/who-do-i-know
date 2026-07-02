@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { desc, eq } from "drizzle-orm";
-import { Download, Mail, NotebookPen, Radar, Users } from "lucide-react";
+import { Archive, Database, Download, Mail, NotebookPen, Radar, Users } from "lucide-react";
 import { db } from "@/db";
 import { emailThreads, notes, outreachTasks, people, syncRuns } from "@/db/schema";
 import { requirePrivatePageSession } from "@/lib/server-session";
@@ -56,6 +56,18 @@ export default async function DashboardPage() {
               <Link href="/filter">
                 <Mail className="mr-2 h-4 w-4" />
                 Sync Gmail
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="rounded-md">
+              <Link href="/archive">
+                <Archive className="mr-2 h-4 w-4" />
+                Archive Google
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="rounded-md">
+              <Link href="/imports/linkedin">
+                <Database className="mr-2 h-4 w-4" />
+                Import LinkedIn
               </Link>
             </Button>
             <Button asChild variant="outline" className="rounded-md">
@@ -149,6 +161,9 @@ export default async function DashboardPage() {
                 </Button>
                 <Button asChild variant="outline" className="justify-start rounded-md">
                   <Link href="/review">Open review sheet</Link>
+                </Button>
+                <Button asChild variant="outline" className="justify-start rounded-md">
+                  <Link href="/imports/linkedin">Import LinkedIn dump</Link>
                 </Button>
                 <Button asChild variant="outline" className="justify-start rounded-md">
                   <Link href="/people?q=china">Find China-related people</Link>

@@ -4,11 +4,15 @@ import { db } from "@/db";
 import {
   aiPersonSummaries,
   aiThreadSummaries,
+  contactMethods,
   emailMessages,
   emailThreads,
   notes,
   outreachTasks,
   people,
+  personTags,
+  personThreadLinks,
+  tags,
 } from "@/db/schema";
 import { requireSession } from "@/lib/auth-guard";
 import { toCsv } from "@/lib/csv-export";
@@ -17,6 +21,7 @@ export const dynamic = "force-dynamic";
 
 const EXPORTS = new Set([
   "contacts",
+  "person_conversations",
   "emails",
   "threads",
   "thread_summaries",
@@ -25,6 +30,14 @@ const EXPORTS = new Set([
   "outreach_queue",
   "manual_notes",
 ]);
+
+const NO_EMAIL_DOMAIN = "no-email.local";
+
+// Synthetic keys we generate for phone-only contacts should not leak into exports.
+function displayEmail(email: string | null): string {
+  if (!email) return "";
+  return email.endsWith(`@${NO_EMAIL_DOMAIN}`) ? "" : email;
+}
 
 export async function GET(
   _req: Request,
@@ -58,13 +71,43 @@ async function buildExport(exportType: string, userId: string): Promise<string> 
       .select()
       .from(people)
       .where(and(eq(people.userId, userId), ne(people.reviewStatus, "archived")));
+
+    const [methods, personTagRows] = await Promise.all([
+      db
+        .select({ personId: contactMethods.personId, type: contactMethods.type, value: contactMethods.value })
+        .from(contactMethods),
+      db
+        .select({ personId: personTags.personId, name: tags.name })
+        .from(personTags)
+        .innerJoin(tags, eq(personTags.tagId, tags.id)),
+    ]);
+
+    const emailsByPerson = new Map<string, Set<string>>();
+    const phonesByPerson = new Map<string, Set<string>>();
+    for (const method of methods) {
+      const bucket = method.type === "phone" ? phonesByPerson : method.type === "email" ? emailsByPerson : null;
+      if (!bucket) continue;
+      const set = bucket.get(method.personId) ?? new Set<string>();
+      set.add(method.value);
+      bucket.set(method.personId, set);
+    }
+    const tagsByPerson = new Map<string, string[]>();
+    for (const row of personTagRows) {
+      const list = tagsByPerson.get(row.personId) ?? [];
+      list.push(row.name);
+      tagsByPerson.set(row.personId, list);
+    }
+
     return toCsv(
       [
         "name",
         "email",
+        "all_emails",
         "phone",
+        "all_phones",
         "instagram_url",
         "linkedin_url",
+        "twitter_url",
         "website_url",
         "organization",
         "role",
@@ -74,25 +117,121 @@ async function buildExport(exportType: string, userId: string): Promise<string> 
         "last_contacted_at",
         "next_follow_up_at",
         "source",
+        "tags",
         "manual_notes",
       ],
-      rows.map((person) => ({
+      rows.map((person) => {
+        const allEmails = Array.from(emailsByPerson.get(person.id) ?? [])
+          .map((email) => displayEmail(email))
+          .filter(Boolean);
+        const allPhones = Array.from(phonesByPerson.get(person.id) ?? []);
+        if (person.phone) allPhones.push(person.phone);
+        return {
+          name: person.name,
+          email: displayEmail(person.primaryEmail),
+          all_emails: Array.from(new Set(allEmails)).join("; "),
+          phone: person.phone,
+          all_phones: Array.from(new Set(allPhones)).join("; "),
+          instagram_url: person.instagramUrl,
+          linkedin_url: person.linkedInUrl,
+          twitter_url: person.twitterUrl,
+          website_url: person.websiteUrl,
+          organization: person.organization,
+          role: person.role,
+          relationship_type: person.relationshipType,
+          review_status: person.reviewStatus,
+          importance_score: person.importanceScore,
+          last_contacted_at: person.lastContactedAt,
+          next_follow_up_at: person.nextFollowUpAt,
+          source: person.source,
+          tags: (tagsByPerson.get(person.id) ?? []).join("; "),
+          manual_notes: person.manualNotes,
+        };
+      }),
+    );
+  }
+
+  if (exportType === "person_conversations") {
+    const persons = await db
+      .select()
+      .from(people)
+      .where(and(eq(people.userId, userId), ne(people.reviewStatus, "archived")));
+
+    const [links, threads, msgs] = await Promise.all([
+      db
+        .select({ personId: personThreadLinks.personId, threadId: personThreadLinks.threadId })
+        .from(personThreadLinks),
+      db.select().from(emailThreads).where(eq(emailThreads.userId, userId)),
+      db.select().from(emailMessages).where(eq(emailMessages.userId, userId)),
+    ]);
+
+    const threadById = new Map(threads.map((thread) => [thread.id, thread]));
+    const messagesByThread = new Map<string, typeof msgs>();
+    for (const message of msgs) {
+      const bucket = messagesByThread.get(message.threadId) ?? [];
+      bucket.push(message);
+      messagesByThread.set(message.threadId, bucket);
+    }
+    const threadIdsByPerson = new Map<string, string[]>();
+    for (const link of links) {
+      const list = threadIdsByPerson.get(link.personId) ?? [];
+      list.push(link.threadId);
+      threadIdsByPerson.set(link.personId, list);
+    }
+
+    const rows = persons.map((person) => {
+      const threadIds = threadIdsByPerson.get(person.id) ?? [];
+      const personThreads = threadIds.map((id) => threadById.get(id)).filter(Boolean);
+      const subjects = new Set<string>();
+      const snippets: string[] = [];
+      let emailCount = 0;
+      let first: Date | null = null;
+      let last: Date | null = null;
+      for (const thread of personThreads) {
+        if (thread?.subject) subjects.add(thread.subject);
+        const threadMessages = messagesByThread.get(thread!.id) ?? [];
+        emailCount += threadMessages.length;
+        for (const message of threadMessages) {
+          if (message.snippet && snippets.length < 40) snippets.push(message.snippet);
+          const sent = message.sentAt;
+          if (sent) {
+            if (!first || sent < first) first = sent;
+            if (!last || sent > last) last = sent;
+          }
+        }
+      }
+      return {
         name: person.name,
-        email: person.primaryEmail,
-        phone: person.phone,
-        instagram_url: person.instagramUrl,
-        linkedin_url: person.linkedInUrl,
-        website_url: person.websiteUrl,
+        email: displayEmail(person.primaryEmail),
         organization: person.organization,
-        role: person.role,
         relationship_type: person.relationshipType,
-        review_status: person.reviewStatus,
         importance_score: person.importanceScore,
-        last_contacted_at: person.lastContactedAt,
-        next_follow_up_at: person.nextFollowUpAt,
-        source: person.source,
+        thread_count: personThreads.length,
+        email_count: emailCount,
+        first_contact: first,
+        last_contact: last,
+        thread_subjects: Array.from(subjects).slice(0, 30).join(" | "),
+        snippets: snippets.join(" — "),
         manual_notes: person.manualNotes,
-      })),
+      };
+    });
+
+    return toCsv(
+      [
+        "name",
+        "email",
+        "organization",
+        "relationship_type",
+        "importance_score",
+        "thread_count",
+        "email_count",
+        "first_contact",
+        "last_contact",
+        "thread_subjects",
+        "snippets",
+        "manual_notes",
+      ],
+      rows,
     );
   }
 

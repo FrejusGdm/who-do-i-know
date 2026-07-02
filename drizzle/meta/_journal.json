@@ -22,6 +22,20 @@
       "when": 1779377911127,
       "tag": "0002_outgoing_ares",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1779402227922,
+      "tag": "0003_known_silver_fox",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1780760246143,
+      "tag": "0004_blushing_la_nuit",
+      "breakpoints": true
     }
   ]
 }

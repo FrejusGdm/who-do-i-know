@@ -71,8 +71,23 @@ function isUserAddress(email: string, userEmail: string): boolean {
   return email.toLowerCase() === userEmail.toLowerCase();
 }
 
-function isLikelyAutomatedAddress(email: string): boolean {
-  return /(^|[-_.])(no-?reply|donotreply|mailer-daemon|notification|notifications)([-_.]|@)/i.test(email);
+export function isLikelyAutomatedAddress(email: string): boolean {
+  const value = email.trim().toLowerCase();
+  if (!value.includes("@")) return true;
+  // Local-part patterns that signal an automated / bulk sender.
+  if (
+    /(^|[-_.])(no-?reply|do-?not-?reply|donotreply|mailer-daemon|postmaster|bounce[sd]?|notification|notifications|alerts?|automated|auto-?confirm|updates?|newsletter|mailer|noreply)([-_.]|@)/i.test(
+      value,
+    )
+  ) {
+    return true;
+  }
+  // Transactional / marketing sending subdomains (kept conservative to avoid
+  // dropping real people whose org merely uses a "mail." host).
+  if (/@(?:bounces?|mailer|em|news|noreply|no-reply|notifications?)\./i.test(value)) {
+    return true;
+  }
+  return false;
 }
 
 function dedupeParticipants(participants: ParticipantMeta[]): ParticipantMeta[] {

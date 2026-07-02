@@ -15,6 +15,7 @@
 
 # production
 /build
+/google-archives
 
 # misc
 .DS_Store
