@@ -39,3 +39,4 @@ next-env.d.ts
 # schwarzman exploration data (third-party profile data)
 /schwarzman-exploration/data/
 /schwarzman-exploration/output/
+/schwarzman-exploration/my-notes.csv
