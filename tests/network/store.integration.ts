@@ -125,3 +125,31 @@ test("real signed sessions reject tampering, expiration, and unauthorized sessio
   assert.equal(await context.internalAdapter.createSession(owner), null);
   await db.update(user).set({ emailVerified: true }).where(eq(user.id, owner));
 });
+
+test("search is owner-scoped, paginated and treats wildcard characters literally", async () => {
+  const { networkPeople, networkPerson } = await import('../../src/lib/network/queries');
+  const mine = await createPerson(owner, { name: 'Search fixture 100%_literal' });
+  const foreign = await createPerson(stranger, { name: 'Search foreign fixture' });
+  await db.update(people).set({ manualNotes: 'unique-foreign-note-needle' }).where(eq(people.id, foreign.id));
+  assert.equal((await networkPeople(owner, { q: 'unique-foreign-note-needle' })).total, 0);
+  assert.equal((await networkPeople(owner, { q: '%_literal' })).people[0]?.id, mine.id);
+  await assert.rejects(() => networkPerson(owner, foreign.id), notFound);
+  await assert.rejects(() => networkPerson(owner, 'not-a-uuid'), notFound);
+  await db.insert(people).values(Array.from({ length: 51 }, (_, index) => ({ userId: owner, name: `Pagination fixture ${String(index).padStart(2, '0')}`, source: 'test' })));
+  const first = await networkPeople(owner, { q: 'Pagination fixture' });
+  const second = await networkPeople(owner, { q: 'Pagination fixture', page: '2' });
+  assert.equal(first.total, 51); assert.equal(first.people.length, 50); assert.equal(first.hasMore, true);
+  assert.equal(second.people.length, 1); assert.equal(second.hasMore, false);
+  assert.notEqual(first.people[0].id, second.people[0].id);
+});
+
+
+test("an unanswered outgoing message is distinct from meeting or a mutual exchange", async () => {
+  const { networkPerson } = await import('../../src/lib/network/queries');
+  const person = await createPerson(owner, { name: 'Outgoing fixture', metState: 'not_met' });
+  await recordInteraction(owner, { requestKey: randomUUID(), personIds: [person.id], body: 'Outgoing test message', channel: 'email', direction: 'outbound', datePrecision: 'day', occurredOn: '2026-09-05', qualifiesForCadence: true });
+  const record = await networkPerson(owner, person.id);
+  assert.equal(record.person.metState, 'not_met');
+  assert.equal(record.person.lastOutboundOn, '2026-09-05');
+  assert.equal(record.person.lastMutualOn, null);
+});

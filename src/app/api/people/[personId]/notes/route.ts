@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { readJsonLimited, RequestError } from "@/lib/request-security";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { notes, people } from "@/db/schema";
@@ -16,10 +18,21 @@ export async function POST(
     if (authErr) return authErr;
 
     const { personId } = await params;
-    const { body, tags = [], followUpReason } = await req.json();
+    z.string().uuid().parse(personId);
+    const { body, tags, followUpReason } = z
+      .object({
+        body: z.string().trim().min(1).max(12000),
+        tags: z.array(z.string().trim().min(1).max(80)).max(30).default([]),
+        followUpReason: z.string().trim().max(500).optional(),
+      })
+      .strict()
+      .parse(await readJsonLimited(req));
 
     if (!body || typeof body !== "string") {
-      return NextResponse.json({ error: "Note body is required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Note body is required" },
+        { status: 400 },
+      );
     }
 
     const [person] = await db
@@ -28,7 +41,7 @@ export async function POST(
       .where(and(eq(people.id, personId), eq(people.userId, session.user.id)))
       .limit(1);
 
-    if (!person) {
+    if (!person || person.archivedAt || person.reviewStatus === "archived") {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
@@ -39,7 +52,8 @@ export async function POST(
         userId: session.user.id,
         body: body.trim(),
         tags: Array.isArray(tags) ? tags : [],
-        followUpReason: typeof followUpReason === "string" ? followUpReason : null,
+        followUpReason:
+          typeof followUpReason === "string" ? followUpReason : null,
       })
       .returning();
 
@@ -54,7 +68,20 @@ export async function POST(
 
     return NextResponse.json({ note }, { status: 201 });
   } catch (error) {
-    console.error("Create note error:", error);
-    return NextResponse.json({ error: "Failed to create note" }, { status: 500 });
+    if (error instanceof RequestError)
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.status },
+      );
+    if (error instanceof z.ZodError)
+      return NextResponse.json(
+        { error: "Check the note and tags" },
+        { status: 400 },
+      );
+    console.error("Create note failed");
+    return NextResponse.json(
+      { error: "Failed to create note" },
+      { status: 500 },
+    );
   }
 }

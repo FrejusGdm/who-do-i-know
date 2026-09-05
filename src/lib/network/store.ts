@@ -83,7 +83,7 @@ export async function recordInteraction(userId: string, raw: z.input<typeof inte
       return existing;
     }
     await tx.insert(interactionParticipants).values(personIds.map((personId) => ({ userId, personId, interactionId: created.id })));
-    await tx.update(people).set({ metState: "met", updatedAt: new Date() })
+    if (input.direction === "mutual") await tx.update(people).set({ metState: "met", updatedAt: new Date() })
       .where(and(eq(people.userId, userId), inArray(people.id, personIds)));
     if (input.datePrecision === "day" && input.occurredOn && input.qualifiesForCadence) {
       const plans = await tx.select().from(keepInTouchPlans)

@@ -1,181 +1,175 @@
 import Link from "next/link";
-import { desc, eq } from "drizzle-orm";
-import { Archive, Database, Download, Mail, NotebookPen, Radar, Users } from "lucide-react";
-import { db } from "@/db";
-import { emailThreads, notes, outreachTasks, people, syncRuns } from "@/db/schema";
+import { ArrowRight, Plus } from "lucide-react";
 import { requirePrivatePageSession } from "@/lib/server-session";
-import { Button } from "@/components/ui/button";
-import { AppNav } from "@/components/AppNav";
-
+import {
+  networkCircles,
+  networkPlannedPeople,
+  ownerSettings,
+} from "@/lib/network/queries";
+import { duePeople } from "@/lib/network/today";
+import {
+  NetworkShell,
+  PageHeading,
+  buttonClass,
+  secondaryButtonClass,
+} from "@/components/network/NetworkShell";
 export const dynamic = "force-dynamic";
-
-function formatDate(value: Date | null) {
-  if (!value) return "No date";
-  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(value);
-}
-
 export default async function DashboardPage() {
   const session = await requirePrivatePageSession();
-  const [personRows, threadRows, noteRows, outreachRows, latestSync] = await Promise.all([
-    db.select().from(people).where(eq(people.userId, session.user.id)),
-    db.select().from(emailThreads).where(eq(emailThreads.userId, session.user.id)),
-    db.select().from(notes).where(eq(notes.userId, session.user.id)),
-    db.select().from(outreachTasks).where(eq(outreachTasks.userId, session.user.id)),
-    db
-      .select()
-      .from(syncRuns)
-      .where(eq(syncRuns.userId, session.user.id))
-      .orderBy(desc(syncRuns.startedAt))
-      .limit(1),
+  const [planned, settings, circles] = await Promise.all([
+    networkPlannedPeople(session.user.id),
+    ownerSettings(session.user.id),
+    networkCircles(session.user.id),
   ]);
-
-  const activePeople = personRows.filter((person) => person.reviewStatus !== "archived");
-  const recentPeople = [...activePeople]
-    .sort((a, b) => (b.lastContactedAt?.getTime() ?? 0) - (a.lastContactedAt?.getTime() ?? 0))
-    .slice(0, 6);
-  const queued = outreachRows.filter((task) => task.status === "queued" || task.status === "needs_review");
-
+  const due = duePeople(planned);
+  const greeting = session.user.name.split(" ")[0];
+  const date = new Intl.DateTimeFormat("en", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    timeZone: settings.timezone,
+  }).format(new Date());
   return (
-    <main className="min-h-screen bg-white px-6 py-10 text-neutral-950">
-      <AppNav />
-      <div className="mx-auto mt-14 max-w-7xl">
-        <header className="flex flex-col gap-6 border-b border-neutral-200 pb-8 md:flex-row md:items-end md:justify-between">
-          <div>
-            <Link href="/" className="text-sm font-medium text-neutral-500">
-              WhoDoYouKnow
-            </Link>
-            <h1 className="mt-3 max-w-3xl text-5xl font-semibold tracking-tight md:text-7xl">
-              Relationship memory
-            </h1>
-            <p className="mt-4 max-w-2xl text-lg text-neutral-600">
-              Private CRM for the people, threads, notes, summaries, and follow-ups pulled from your Gmail history.
-            </p>
+    <NetworkShell active="Today">
+      <PageHeading
+        eyebrow={`${date} · ${settings.timezone}`}
+        title={`A little time for your people${greeting ? `, ${greeting}` : ""}.`}
+        description="Start with someone you’ve been meaning to reach. There doesn’t have to be big news."
+        action={
+          <Link href="/people" className={buttonClass}>
+            <Plus className="size-4" aria-hidden />
+            Log a conversation
+          </Link>
+        }
+      />
+      <div className="grid items-start gap-8 xl:grid-cols-[1.7fr_1fr]">
+        <section>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-xl font-medium text-balance">
+              Time to reconnect
+            </h2>
+            <span className="text-sm tabular-nums text-[#62685e]">
+              {due.length} {due.length === 1 ? "person" : "people"}
+            </span>
           </div>
-          <div className="flex flex-wrap gap-3">
-            <Button asChild className="rounded-md bg-neutral-950 text-white hover:bg-neutral-800">
-              <Link href="/filter">
-                <Mail className="mr-2 h-4 w-4" />
-                Sync Gmail
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="rounded-md">
-              <Link href="/archive">
-                <Archive className="mr-2 h-4 w-4" />
-                Archive Google
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="rounded-md">
-              <Link href="/imports/linkedin">
-                <Database className="mr-2 h-4 w-4" />
-                Import LinkedIn
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="rounded-md">
-              <Link href="/exports">
-                <Download className="mr-2 h-4 w-4" />
-                Exports
-              </Link>
-            </Button>
-          </div>
-        </header>
-
-        <section className="grid gap-3 py-8 sm:grid-cols-2 lg:grid-cols-4">
-          {[
-            { label: "Active people", value: activePeople.length, icon: Users },
-            { label: "Gmail threads", value: threadRows.length, icon: Mail },
-            { label: "Manual notes", value: noteRows.length, icon: NotebookPen },
-            { label: "Mentor candidates", value: queued.length, icon: Radar },
-          ].map((stat) => (
-            <div key={stat.label} className="border border-neutral-200 p-5">
-              <div className="flex items-center justify-between text-neutral-500">
-                <span className="text-sm">{stat.label}</span>
-                <stat.icon className="h-4 w-4" />
-              </div>
-              <p className="mt-6 text-4xl font-semibold tracking-tight">{stat.value}</p>
-            </div>
-          ))}
-        </section>
-
-        <section className="grid gap-8 lg:grid-cols-[1.4fr_0.8fr]">
-          <div>
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-xl font-semibold">Recent people</h2>
-              <Link href="/people" className="text-sm font-medium text-neutral-600 hover:text-neutral-950">
-                View all
-              </Link>
-            </div>
-            <div className="overflow-hidden border border-neutral-200">
-              <table className="w-full text-sm">
-                <thead className="bg-neutral-50 text-left text-neutral-500">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">Name</th>
-                    <th className="px-4 py-3 font-medium">Type</th>
-                    <th className="px-4 py-3 font-medium">Last contact</th>
-                    <th className="px-4 py-3 font-medium">Priority</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentPeople.map((person) => (
-                    <tr key={person.id} className="border-t border-neutral-200">
-                      <td className="px-4 py-4">
-                        <Link href={`/people/${person.id}`} className="font-medium hover:underline">
-                          {person.name}
-                        </Link>
-                        <p className="text-neutral-500">{person.primaryEmail}</p>
-                      </td>
-                      <td className="px-4 py-4 capitalize">{person.relationshipType}</td>
-                      <td className="px-4 py-4">{formatDate(person.lastContactedAt)}</td>
-                      <td className="px-4 py-4">{person.importanceScore}</td>
-                    </tr>
-                  ))}
-                  {recentPeople.length === 0 && (
-                    <tr>
-                      <td className="px-4 py-10 text-neutral-500" colSpan={4}>
-                        No people yet. Start a Gmail sync to populate your relationship memory.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <aside className="space-y-6">
-            <div className="border border-neutral-200 p-5">
-              <h2 className="text-xl font-semibold">Latest sync</h2>
-              {latestSync[0] ? (
-                <div className="mt-4 space-y-2 text-sm text-neutral-600">
-                  <p>Status: <span className="font-medium text-neutral-950">{latestSync[0].status}</span></p>
-                  <p>Started: {formatDate(latestSync[0].startedAt)}</p>
-                  <p>Stats: {JSON.stringify(latestSync[0].stats)}</p>
+          <ul className="divide-y divide-[#deded5] overflow-hidden rounded-lg border border-[#deded5] bg-white">
+            {due.map((person) => (
+              <li key={person.id} className="p-5 sm:p-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <Link
+                      href={`/people/${person.id}`}
+                      className="text-xl font-medium hover:underline"
+                    >
+                      {person.name}
+                    </Link>
+                    <p className="mt-1 text-sm text-[#62685e]">
+                      {circles
+                        .filter((circle) =>
+                          circle.personIds.includes(person.id),
+                        )
+                        .map((circle) => circle.name)
+                        .join(" · ") || person.relationshipType}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-[#e5eadd] px-3 py-1 text-sm text-[#344e3d]">
+                    {person.plan.preferredChannel.replace("_", " ")}
+                  </span>
                 </div>
-              ) : (
-                <p className="mt-4 text-sm text-neutral-600">No sync has run yet.</p>
-              )}
+                <p className="mt-4 text-sm text-[#43664F]">{person.reason}</p>
+                <p className="mt-2 text-sm text-[#62685e]">
+                  Last qualifying contact:{" "}
+                  {person.plan.lastContactOn ?? "unknown"}
+                </p>
+                <div className="mt-5 flex flex-wrap gap-3">
+                  <Link
+                    className={secondaryButtonClass}
+                    href={`/people/${person.id}`}
+                  >
+                    Open their story
+                    <ArrowRight className="size-4" aria-hidden />
+                  </Link>
+                  <Link
+                    className="inline-flex min-h-11 items-center text-sm text-[#43664F] underline"
+                    href={`/people/${person.id}#log-contact`}
+                  >
+                    Already in touch? Log it
+                  </Link>
+                </div>
+              </li>
+            ))}
+          </ul>
+          {due.length === 0 && (
+            <div className="rounded-lg border border-dashed border-[#c8ccc1] px-6 py-10">
+              <h3 className="font-serif text-3xl text-balance">
+                {planned.length
+                  ? "A little breathing room."
+                  : "Who would you like to stay close to?"}
+              </h3>
+              <p className="mt-3 max-w-md text-pretty leading-7 text-[#62685e]">
+                {planned.length
+                  ? "No check-ins are due right now. You can still record a conversation or spend a moment with someone on your mind."
+                  : "Choose someone, remember your shared story, and set a rhythm that feels right. Three calendar months is a good place to start."}
+              </p>
+              <Link
+                className={`${secondaryButtonClass} mt-6`}
+                href={planned.length ? "/people" : "/people/new"}
+              >
+                {planned.length ? "Visit your people" : "Add your first person"}
+              </Link>
             </div>
-            <div className="border border-neutral-200 p-5">
-              <h2 className="text-xl font-semibold">Next actions</h2>
-              <div className="mt-4 flex flex-col gap-3">
-                <Button asChild variant="outline" className="justify-start rounded-md">
-                  <Link href="/outreach">Open Mentor Finder</Link>
-                </Button>
-                <Button asChild variant="outline" className="justify-start rounded-md">
-                  <Link href="/review">Open review sheet</Link>
-                </Button>
-                <Button asChild variant="outline" className="justify-start rounded-md">
-                  <Link href="/imports/linkedin">Import LinkedIn dump</Link>
-                </Button>
-                <Button asChild variant="outline" className="justify-start rounded-md">
-                  <Link href="/people?q=china">Find China-related people</Link>
-                </Button>
-                <Button asChild variant="outline" className="justify-start rounded-md">
-                  <Link href="/people?q=mentor">Find mentors</Link>
-                </Button>
-              </div>
-            </div>
-          </aside>
+          )}
         </section>
+        <aside className="space-y-6">
+          <section className="rounded-lg border border-[#deded5] bg-[#efeee5] p-6">
+            <p className="text-sm text-[#62685e]">A thought before you write</p>
+            <h2 className="mt-3 font-serif text-3xl text-balance">
+              Small is enough.
+            </h2>
+            <p className="mt-3 text-pretty leading-7 text-[#62685e]">
+              A question you’ve been sitting with. Something that reminded you
+              of them. A simple hello.
+            </p>
+            <p className="mt-4 text-sm leading-6 text-[#62685e]">
+              Being due is an invitation to consider reconnecting. You can
+              always snooze or pause.
+            </p>
+          </section>
+          <section>
+            <h2 className="mb-3 text-lg font-medium text-balance">
+              Your circles
+            </h2>
+            {circles.length ? (
+              <ul className="divide-y divide-[#deded5]">
+                {circles.map((circle) => (
+                  <li key={circle.id}>
+                    <Link
+                      href={`/circles/${circle.id}`}
+                      className="flex min-h-14 items-center justify-between gap-3 py-3 text-sm"
+                    >
+                      <span>{circle.name}</span>
+                      <span className="tabular-nums text-[#62685e]">
+                        {circle.personIds.length}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm leading-6 text-[#62685e]">
+                Group classmates, mentors, and other people who share a part of
+                your life.
+              </p>
+            )}
+            <Link
+              href="/circles"
+              className="mt-3 inline-flex min-h-11 items-center text-sm text-[#43664F] underline"
+            >
+              {circles.length ? "All circles" : "Create a circle"}
+            </Link>
+          </section>
+        </aside>
       </div>
-    </main>
+    </NetworkShell>
   );
 }
