@@ -1,18 +1,22 @@
-import { neon } from "@neondatabase/serverless";
-import { drizzle, type NeonHttpDatabase } from "drizzle-orm/neon-http";
+import { Pool } from "pg";
+import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
+import { databaseConfig } from "./config";
 import * as schema from "./schema";
 
-let _db: NeonHttpDatabase<typeof schema> | null = null;
+let _db: NodePgDatabase<typeof schema> | null = null;
+let pool: Pool | null = null;
 
-function getDb(): NeonHttpDatabase<typeof schema> {
+function getDb(): NodePgDatabase<typeof schema> {
   if (!_db) {
-    const sql = neon(process.env.DATABASE_URL!);
-    _db = drizzle(sql, { schema });
+    pool = new Pool(databaseConfig());
+    // Do not log the error object: it can contain credentials or SQL parameters.
+    pool.on("error", () => console.error("Database connection failed"));
+    _db = drizzle(pool, { schema });
   }
   return _db;
 }
 
-export const db = new Proxy({} as NeonHttpDatabase<typeof schema>, {
+export const db = new Proxy({} as NodePgDatabase<typeof schema>, {
   get(_target, prop) {
     const instance = getDb();
     const value = (instance as unknown as Record<string | symbol, unknown>)[prop];
@@ -22,3 +26,9 @@ export const db = new Proxy({} as NeonHttpDatabase<typeof schema>, {
     return value;
   },
 });
+
+export async function closeDatabase() {
+  await pool?.end();
+  pool = null;
+  _db = null;
+}

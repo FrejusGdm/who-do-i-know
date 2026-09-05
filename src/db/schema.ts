@@ -1,4 +1,4 @@
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   pgTable,
   uuid,
@@ -10,6 +10,9 @@ import {
   boolean,
   index,
   uniqueIndex,
+  date,
+  foreignKey,
+  check,
 } from "drizzle-orm/pg-core";
 
 // ── Better Auth tables ──────────────────────────────────────────────
@@ -129,7 +132,7 @@ export const people = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    primaryEmail: text("primary_email").notNull(),
+    primaryEmail: text("primary_email"),
     name: text("name").notNull(),
     phone: text("phone"),
     linkedInUrl: text("linkedin_url"),
@@ -145,6 +148,7 @@ export const people = pgTable(
     nextFollowUpAt: timestamp("next_follow_up_at"),
     source: text("source").notNull().default("gmail"),
     manualNotes: text("manual_notes"),
+    metState: text("met_state").notNull().default("needs_context"),
     archivedAt: timestamp("archived_at"),
     archivedReason: text("archived_reason"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -155,6 +159,7 @@ export const people = pgTable(
   },
   (table) => [
     uniqueIndex("people_user_primary_email_uidx").on(table.userId, table.primaryEmail),
+    uniqueIndex("people_id_owner_uidx").on(table.id, table.userId),
     index("people_user_idx").on(table.userId),
     index("people_user_review_status_idx").on(table.userId, table.reviewStatus),
     index("people_last_contacted_idx").on(table.lastContactedAt),
@@ -825,3 +830,115 @@ export const linkedinMessageRelations = relations(linkedinMessages, ({ one }) =>
     references: [people.id],
   }),
 }));
+
+// Network OS: real contact history is independent of import and mentor-review state.
+export const networkSettings = pgTable("network_settings", {
+  userId: text("user_id").primaryKey().references(() => user.id, { onDelete: "cascade" }),
+  timezone: text("timezone").notNull().default("Asia/Shanghai"),
+  cloudProcessingAllowed: boolean("cloud_processing_allowed").notNull().default(false),
+  draftingLanguage: text("drafting_language"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const circles = pgTable("circles", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  kind: text("kind").notNull().default("circle"),
+  cohortLabel: text("cohort_label"),
+  expectedCount: integer("expected_count"),
+  sourceUrl: text("source_url"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("circles_id_owner_uidx").on(t.id, t.userId),
+  uniqueIndex("circles_owner_name_uidx").on(t.userId, t.name),
+]);
+
+export const circleMembers = pgTable("circle_members", {
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  circleId: uuid("circle_id").notNull(),
+  personId: uuid("person_id").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("circle_members_unique").on(t.userId, t.circleId, t.personId),
+  foreignKey({ columns: [t.circleId, t.userId], foreignColumns: [circles.id, circles.userId] }).onDelete("cascade"),
+  foreignKey({ columns: [t.personId, t.userId], foreignColumns: [people.id, people.userId] }).onDelete("cascade"),
+]);
+
+export const interactions = pgTable("interactions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  requestKey: uuid("request_key").notNull(),
+  requestHash: text("request_hash").notNull(),
+  body: text("body").notNull(),
+  channel: text("channel").notNull(),
+  direction: text("direction").notNull().default("mutual"),
+  datePrecision: text("date_precision").notNull().default("unknown"),
+  occurredOn: date("occurred_on"),
+  occurredUntil: date("occurred_until"),
+  datePhrase: text("date_phrase"),
+  qualifiesForCadence: boolean("qualifies_for_cadence").notNull().default(false),
+  shareInDrafts: boolean("share_in_drafts").notNull().default(false),
+  source: text("source").notNull().default("manual"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("interactions_id_owner_uidx").on(t.id, t.userId),
+  uniqueIndex("interactions_owner_request_uidx").on(t.userId, t.requestKey),
+  index("interactions_owner_date_idx").on(t.userId, t.occurredOn),
+  check("interactions_precision_check", sql`${t.datePrecision} in ('day', 'month', 'range', 'unknown')`),
+  check("interactions_exact_check", sql`${t.datePrecision} <> 'day' OR ${t.occurredOn} IS NOT NULL`),
+]);
+
+export const interactionParticipants = pgTable("interaction_participants", {
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  interactionId: uuid("interaction_id").notNull(),
+  personId: uuid("person_id").notNull(),
+}, (t) => [
+  uniqueIndex("interaction_participants_unique").on(t.userId, t.interactionId, t.personId),
+  index("interaction_participants_person_idx").on(t.userId, t.personId),
+  foreignKey({ columns: [t.interactionId, t.userId], foreignColumns: [interactions.id, interactions.userId] }).onDelete("cascade"),
+  foreignKey({ columns: [t.personId, t.userId], foreignColumns: [people.id, people.userId] }).onDelete("cascade"),
+]);
+
+export const keepInTouchPlans = pgTable("keep_in_touch_plans", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  personId: uuid("person_id").notNull(),
+  intervalCount: integer("interval_count").notNull().default(3),
+  intervalUnit: text("interval_unit").$type<"days" | "weeks" | "months">().notNull().default("months"),
+  timezone: text("timezone").notNull().default("Asia/Shanghai"),
+  preferredChannel: text("preferred_channel").notNull().default("email"),
+  status: text("status").$type<"active" | "paused">().notNull().default("active"),
+  anchorOn: date("anchor_on").notNull(),
+  nextDueOn: date("next_due_on").notNull(),
+  lastContactOn: date("last_contact_on"),
+  snoozedUntil: date("snoozed_until"),
+  cycleNumber: integer("cycle_number").notNull().default(1),
+  revision: integer("revision").notNull().default(1),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("plans_owner_person_uidx").on(t.userId, t.personId),
+  uniqueIndex("plans_id_owner_uidx").on(t.id, t.userId),
+  index("plans_owner_due_idx").on(t.userId, t.status, t.nextDueOn),
+  foreignKey({ columns: [t.personId, t.userId], foreignColumns: [people.id, people.userId] }).onDelete("cascade"),
+  check("plans_interval_count_check", sql`${t.intervalCount} between 1 and 120`),
+  check("plans_interval_unit_check", sql`${t.intervalUnit} in ('days', 'weeks', 'months')`),
+]);
+
+export const checkIns = pgTable("check_ins", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  planId: uuid("plan_id").notNull(),
+  cycleKey: text("cycle_key").notNull(),
+  dueOn: date("due_on").notNull(),
+  status: text("status").$type<"open" | "completed" | "skipped" | "canceled">().notNull().default("open"),
+  interactionId: uuid("interaction_id"),
+  decision: text("decision"),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("check_ins_cycle_uidx").on(t.planId, t.cycleKey),
+  foreignKey({ columns: [t.planId, t.userId], foreignColumns: [keepInTouchPlans.id, keepInTouchPlans.userId] }).onDelete("cascade"),
+  foreignKey({ columns: [t.interactionId, t.userId], foreignColumns: [interactions.id, interactions.userId] }),
+]);

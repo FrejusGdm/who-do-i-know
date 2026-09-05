@@ -29,7 +29,7 @@ const reviewStatuses = new Set(["new", "needs_review", "confirmed", "not_mentor"
 
 const personPatchSchema = z.object({
   name: z.string().trim().min(1).max(200).optional(),
-  primaryEmail: z.string().trim().email().max(320).optional(),
+  primaryEmail: z.union([z.string().trim().email().max(320), z.literal(""), z.null()]).optional(),
   phone: z.string().trim().max(80).nullable().optional(),
   instagramUrl: z.string().trim().max(500).nullable().optional(),
   linkedInUrl: z.string().trim().max(500).nullable().optional(),
@@ -76,7 +76,7 @@ export async function PATCH(
     };
 
     if (body.name !== undefined) updates.name = body.name;
-    if (body.primaryEmail !== undefined) updates.primaryEmail = body.primaryEmail.toLowerCase();
+    if (body.primaryEmail !== undefined) updates.primaryEmail = body.primaryEmail?.toLowerCase() || null;
     if (body.phone !== undefined) updates.phone = emptyToNull(body.phone);
     if (body.instagramUrl !== undefined) updates.instagramUrl = emptyToNull(body.instagramUrl);
     if (body.linkedInUrl !== undefined) updates.linkedInUrl = emptyToNull(body.linkedInUrl);

@@ -18,7 +18,7 @@ Implement the full Network OS PRD through M1–M6, including secure private work
 | Milestone | Status | Evidence / remaining work |
 | --- | --- | --- |
 | M0: baseline and design | In progress | Repo and objective inspected; branch created; dependency/security audit pending |
-| M1: people, circles, interactions, cadence | Next | Calendar semantics, transactional owner-scoped storage, migration tests, usable controls |
+| M1: people, circles, interactions, cadence | In progress | Calendar semantics and transactional store implemented; 9 unit tests and 5 local PostgreSQL integration tests passed; routes/UI still pending |
 | M2: interviews and reviewed memory | Not started | Persistent turns, grounded proposals, atomic review, correction |
 | M3: Today and reconnecting | Not started | Due queue, open loops, preferences, optional grounded drafts |
 | M4: cohort import and voice | Not started | Roster source/reconciliation, private audio/transcription |
@@ -37,3 +37,20 @@ Implement the full Network OS PRD through M1–M6, including secure private work
 ## Continuation
 
 Next: finish baseline checks, add a standard PostgreSQL transactional connection with verified TLS, create M1 schema/migrations and calendar tests, then implement the owner-scoped workflow. Keep reviewing and committing small verified slices and record commit IDs below. AWS credit coverage, domain and model configuration are deployment inputs; they do not block local work.
+
+## Checkpoints
+
+- `576b476`: committed the PRD, glossary, handoff and baseline record. No private notes committed.
+- M1 storage: nullable person email, same-owner composite foreign keys, circles, explicit interactions, separate contact plans/check-in decisions, settings. Standard PostgreSQL driver replaces Neon HTTP to support atomic operations and future RDS. Remote TLS certificate verification is enforced.
+- Local integration DB: disposable `network_os_test` on localhost:55439, cluster `/private/tmp/network-os-pg/data`. No live Neon schema/data has been changed. Tests require an explicit `TEST_DATABASE_URL` with a local host and `_test` database suffix; no production fallback.
+- Migration `0005_network_foundation.sql` generated then reviewed: reordered unique indexes before composite FK creation after the first local migration test exposed generator ordering. Fresh migration and retry tests now pass.
+- One compatibility guard added to the user's pre-existing uncommitted archive edits: omit null primary emails from its temporary email-to-ID map. This hunk stays uncommitted with the user's archive work; the committed pre-existing archive implementation does not contain the affected loop. Do not stage the whole archive file.
+- Baseline dependency audit reports 37 advisories (2 critical, 21 high, 11 moderate, 3 low). Applicable Next.js/BetterAuth/Drizzle patches are being evaluated before deployment; this storage checkpoint is not a security release. Do not apply `npm audit fix --force`.
+
+## Local verification commands
+
+`npm test`, `npm run typecheck`, `npm run lint`, `npm run build`.
+
+For database integration tests, set `NODE_ENV=test` and `TEST_DATABASE_URL=postgresql://network_test@127.0.0.1:55439/network_os_test`, then run `npm run test:integration`. The cluster is test-only; starting it may require sandbox approval for local sockets/shared memory.
+
+Remote database connections require a valid certificate chain. Set `DATABASE_CA_FILE` for an additional trusted RDS CA bundle if needed; do not disable verification. `DATABASE_POOL_SIZE` defaults to 5 and is bounded to 1–30. Production schema changes run through reviewed `npm run db:migrate`, never build-time migration or `db:push`.

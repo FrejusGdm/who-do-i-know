@@ -36,6 +36,13 @@
       "when": 1780760246143,
       "tag": "0004_blushing_la_nuit",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788649408565,
+      "tag": "0005_network_foundation",
+      "breakpoints": true
     }
   ]
 }

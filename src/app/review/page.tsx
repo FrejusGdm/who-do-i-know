@@ -26,7 +26,7 @@ export default async function ReviewPage() {
     return {
       id: person.id,
       name: person.name,
-      primaryEmail: person.primaryEmail,
+      primaryEmail: person.primaryEmail ?? "",
       phone: person.phone,
       instagramUrl: person.instagramUrl,
       linkedInUrl: person.linkedInUrl,
