@@ -15,13 +15,15 @@ This document describes the security model for the WhoDoYouKnow application.
 ### Session lifecycle
 
 1. User signs in via Google OAuth at `/api/auth/*`
-2. BetterAuth creates a session (2-hour TTL) and sets a `better-auth.session_token` cookie
+2. BetterAuth creates a session (seven-day lifetime, refreshed at most once a day) and sets a `better-auth.session_token` cookie
 3. API routes validate sessions via `auth.api.getSession({ headers })`
-4. Sessions expire after 2 hours — the user must re-authenticate
+4. Expired sessions require re-authentication; revoked or unverified owners cannot use private routes
 
 ### Startup guard
 
-`src/lib/auth.ts` throws at module load if `BETTER_AUTH_SECRET` is missing or empty, preventing the app from running with a forgeable session secret.
+`src/lib/auth.ts` initializes lazily. At runtime in production it requires a secret of at least 32 characters, an HTTPS auth URL, Google OAuth credentials, and a nonempty private owner allowlist. Builds do not access production credentials. The development fallback secret is rejected in production.
+
+User and session creation require an allowlisted, verified email. Route guards repeat this check so removing an owner from the allowlist also revokes access through existing sessions. Missing allowlist configuration fails closed in every environment.
 
 ---
 
@@ -29,7 +31,7 @@ This document describes the security model for the WhoDoYouKnow application.
 
 ### Three-layer defense
 
-1. **Middleware** (`src/middleware.ts`) — checks for session cookie presence on all `/api/*` routes (except `/api/auth/*` and `/api/webhook/*`). This is a fast early gate that rejects completely unauthenticated requests before they reach route handlers.
+1. **Middleware** (`src/middleware.ts`) — checks for session cookie presence on all `/api/*` routes (except BetterAuth and the signature-verified Stripe webhook). Both ordinary and production `__Secure-` cookie names are recognized. Cookie presence is only an early gate; handlers still verify the session. Custom API mutations also require an exact configured Origin and reject cross-site Fetch Metadata. Private API responses use `Cache-Control: private, no-store`.
 
 2. **Route-level session validation** — each route calls `requireSession()` from `src/lib/auth-guard.ts` to fully validate the session (not just cookie presence).
 
@@ -152,3 +154,14 @@ The `sendDownloadEmail()` function in `src/lib/resend.ts`:
 - Validates that `downloadUrl` starts with `https://` — refuses to send emails with local file paths
 - Escapes the URL with HTML entity encoding before interpolation into the email template
 - Prevents XSS injection via crafted URLs in email bodies
+
+
+## Network OS input and storage boundaries
+
+New JSON endpoints read a bounded stream (64 KiB by default), require JSON content, and validate fields with Zod. Database errors are not returned to clients. LinkedIn ZIP parsing limits compressed and expanded sizes, entry count and per-file size before extraction; unsafe or duplicate paths are rejected. LinkedIn multipart uploads are bounded before parsing, including when Content-Length is absent or understated. Durable file handling remains deployment work.
+
+Relationship operations enforce owner IDs in queries and composite foreign keys. Recording an interaction and updating its contact plan share a transaction and idempotency key. Unknown dates and non-contact actions cannot advance cadence. Remote PostgreSQL connections verify TLS certificates; URL parameters cannot disable verification.
+
+## Known deployment work
+
+This document describes implemented boundaries, not a deployment security certification. Gmail scopes are still requested at sign-in and need a separate optional connection flow. Existing local archive storage and in-memory pipeline progress need durable replacements. Private object storage, worker permissions, retention, AI review and export/deletion controls are tracked in the Network OS PRD and progress record.

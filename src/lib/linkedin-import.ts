@@ -1,4 +1,4 @@
-import AdmZip from "adm-zip";
+import { boundedZipFiles } from "./zip-safety";
 import { createHash } from "crypto";
 import { parse } from "csv-parse/sync";
 import { eq, inArray } from "drizzle-orm";
@@ -187,13 +187,9 @@ function matchPersonId(row: { email?: string | null; linkedInUrl?: string | null
   };
 }
 
-function toRawFiles(zip: AdmZip): RawFileForInsert[] {
-  return zip
-    .getEntries()
-    .filter((entry) => !entry.isDirectory)
-    .map((entry) => {
-      const data = entry.getData();
-      const path = entry.entryName;
+function toRawFiles(archive: Buffer): RawFileForInsert[] {
+  return boundedZipFiles(archive)
+    .map(({ content: data, path }) => {
       const isText = looksTextual(path, data);
       const contentText = isText ? stripBom(data.toString("utf8")) : null;
       const isCsv = isText && fileExtension(path) === ".csv";
@@ -218,8 +214,7 @@ export async function importLinkedInArchive({
   sourceLabel: string;
   data: Buffer;
 }): Promise<LinkedInImportResult> {
-  const zip = new AdmZip(data);
-  const rawFiles = toRawFiles(zip);
+  const rawFiles = toRawFiles(data);
   const connectionsFile = rawFiles.find((file) => file.path === "Connections.csv");
   const messagesFile = rawFiles.find((file) => file.path === "messages.csv");
 

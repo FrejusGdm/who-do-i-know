@@ -99,3 +99,29 @@ test("snooze and pause do not invent contact; actual contact replaces a snoozed 
   const skipped = await actOnPlan(owner, person.id, { action: "skip", revision: paused.revision });
   assert.equal(skipped.lastContactOn, "2026-08-20"); assert.equal(skipped.status, "paused");
 });
+
+test("real signed sessions reject tampering, expiration, and unauthorized session creation", async () => {
+  const secret = `test-only-${randomUUID()}-${randomUUID()}`;
+  process.env.BETTER_AUTH_SECRET = secret;
+  process.env.BETTER_AUTH_URL = "http://localhost:3000";
+  process.env.PRIVATE_USER_EMAILS = `${owner}@example.test`;
+  const { auth } = await import("../../src/lib/auth");
+  const { makeSignature } = await import("better-auth/crypto");
+  const { session: sessionTable } = await import("../../src/db/schema");
+  const context = await auth.$context;
+  const valid = await context.internalAdapter.createSession(owner);
+  assert.ok(valid);
+  assert.equal(await context.internalAdapter.createSession(stranger), null);
+  assert.equal(await context.internalAdapter.createUser({ name: "Denied fixture", email: "uninvited@example.test", emailVerified: true }), null);
+  const signature = await makeSignature(valid.token, secret);
+  const cookie = `better-auth.session_token=${encodeURIComponent(`${valid.token}.${signature}`)}`;
+  const read = (value: string) => auth.api.getSession({ headers: new Headers({ cookie: value }) });
+  assert.equal((await read(cookie))?.user.id, owner);
+  assert.equal(await read(`${cookie}tampered`), null);
+  assert.equal(await read("better-auth.session_token=made-up"), null);
+  await db.update(sessionTable).set({ expiresAt: new Date(Date.now() - 60_000) }).where(eq(sessionTable.id, valid.id));
+  assert.equal(await read(cookie), null);
+  await db.update(user).set({ emailVerified: false }).where(eq(user.id, owner));
+  assert.equal(await context.internalAdapter.createSession(owner), null);
+  await db.update(user).set({ emailVerified: true }).where(eq(user.id, owner));
+});

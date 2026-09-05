@@ -36,12 +36,12 @@ Implement the full Network OS PRD through M1–M6, including secure private work
 
 ## Continuation
 
-Next: finish baseline checks, add a standard PostgreSQL transactional connection with verified TLS, create M1 schema/migrations and calendar tests, then implement the owner-scoped workflow. Keep reviewing and committing small verified slices and record commit IDs below. AWS credit coverage, domain and model configuration are deployment inputs; they do not block local work.
+Next: finish verification and commit the authentication/upload hardening checkpoint, then expose the M1 store through owner-scoped routes and working People, Circles, Person and Today screens. Keep reviewing and committing small verified slices and record commit IDs below. AWS credit coverage, domain and model configuration are deployment inputs; they do not block local work.
 
 ## Checkpoints
 
 - `576b476`: committed the PRD, glossary, handoff and baseline record. No private notes committed.
-- M1 storage: nullable person email, same-owner composite foreign keys, circles, explicit interactions, separate contact plans/check-in decisions, settings. Standard PostgreSQL driver replaces Neon HTTP to support atomic operations and future RDS. Remote TLS certificate verification is enforced.
+- `716a395` — M1 storage: nullable person email, same-owner composite foreign keys, circles, explicit interactions, separate contact plans/check-in decisions, settings. Standard PostgreSQL driver replaces Neon HTTP to support atomic operations and future RDS. Remote TLS certificate verification is enforced.
 - Local integration DB: disposable `network_os_test` on localhost:55439, cluster `/private/tmp/network-os-pg/data`. No live Neon schema/data has been changed. Tests require an explicit `TEST_DATABASE_URL` with a local host and `_test` database suffix; no production fallback.
 - Migration `0005_network_foundation.sql` generated then reviewed: reordered unique indexes before composite FK creation after the first local migration test exposed generator ordering. Fresh migration and retry tests now pass.
 - One compatibility guard added to the user's pre-existing uncommitted archive edits: omit null primary emails from its temporary email-to-ID map. This hunk stays uncommitted with the user's archive work; the committed pre-existing archive implementation does not contain the affected loop. Do not stage the whole archive file.
@@ -54,3 +54,12 @@ Next: finish baseline checks, add a standard PostgreSQL transactional connection
 For database integration tests, set `NODE_ENV=test` and `TEST_DATABASE_URL=postgresql://network_test@127.0.0.1:55439/network_os_test`, then run `npm run test:integration`. The cluster is test-only; starting it may require sandbox approval for local sockets/shared memory.
 
 Remote database connections require a valid certificate chain. Set `DATABASE_CA_FILE` for an additional trusted RDS CA bundle if needed; do not disable verification. `DATABASE_POOL_SIZE` defaults to 5 and is bounded to 1–30. Production schema changes run through reviewed `npm run db:migrate`, never build-time migration or `db:push`.
+
+## Security checkpoint
+
+- Updated Next to 15.5.25, BetterAuth to 1.6.30, Drizzle to 0.45.2, adm-zip to 0.6.0 and direct PostCSS to 8.5.28. Removed unused `@better-auth/infra`, which pulled an old SSO plugin. No forced major upgrades.
+- Closed owner allowlist, verified identity on private requests and user/session creation, lazy production configuration validation, seven-day sessions, secure-cookie middleware support, exact-origin mutation checks.
+- Bounded JSON and LinkedIn multipart streams, ZIP central-directory limits, safe paths and sanitized import errors.
+- 16 unit tests and six local PostgreSQL integration tests pass, including actual signed cookies, tampering, expiration and denied session creation. Denied user creation is also tested. Type checking, lint and the production build passed. New UI changes made after the build are a separate, unverified slice.
+- Audit after patches: 28 reported vulnerabilities (0 critical, 13 high, 12 moderate, 3 low). Remaining advisories include tooling/CLI dependencies, transitive fetch/image libraries and Next's bundled PostCSS. These still need reachability assessment and targeted fixes before deployment. Do not interpret reduced counts as a clean security audit or blindly upgrade to suggested older Drizzle tooling.
+- Production data, AWS resources and Neon remain untouched. No email/contact messages sent.
