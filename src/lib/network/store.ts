@@ -9,9 +9,13 @@ import { circleInput, interactionInput, personInput, planActionInput, planInput 
 export class NetworkError extends Error {
   constructor(public status: 400 | 404 | 409, message: string) { super(message); }
 }
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+export type NetworkTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-async function lockPeople(tx: Tx, userId: string, ids: string[]) {
+function inTransaction<T>(transaction: NetworkTx | undefined, action: (tx: NetworkTx) => Promise<T>): Promise<T> {
+  return transaction ? action(transaction) : db.transaction(action);
+}
+
+export async function lockPeople(tx: NetworkTx, userId: string, ids: string[]) {
   // Consistent ordering prevents deadlocks when group conversations overlap.
   const rows = await tx.select().from(people)
     .where(and(eq(people.userId, userId), inArray(people.id, ids), isNull(people.archivedAt), ne(people.reviewStatus, "archived")))
@@ -20,9 +24,9 @@ async function lockPeople(tx: Tx, userId: string, ids: string[]) {
   return rows;
 }
 
-export async function createPerson(userId: string, raw: z.input<typeof personInput>) {
+export async function createPerson(userId: string, raw: z.input<typeof personInput>, transaction?: NetworkTx) {
   const input = personInput.parse(raw);
-  return db.transaction(async (tx) => {
+  return inTransaction(transaction, async (tx) => {
     if (input.circleIds.length) {
       const matches = await tx.select({ id: circles.id }).from(circles)
         .where(and(eq(circles.userId, userId), inArray(circles.id, input.circleIds)));
@@ -44,9 +48,9 @@ export async function createCircle(userId: string, raw: z.input<typeof circleInp
   return circle;
 }
 
-export async function setCircleMembership(userId: string, circleId: string, personId: string, member: boolean) {
+export async function setCircleMembership(userId: string, circleId: string, personId: string, member: boolean, transaction?: NetworkTx) {
   z.string().uuid().parse(circleId); z.string().uuid().parse(personId);
-  await db.transaction(async (tx) => {
+  await inTransaction(transaction, async (tx) => {
     await lockPeople(tx, userId, [personId]);
     const [circle] = await tx.select().from(circles).where(and(eq(circles.id, circleId), eq(circles.userId, userId)));
     if (!circle) throw new NetworkError(404, "Circle not found");
@@ -55,7 +59,7 @@ export async function setCircleMembership(userId: string, circleId: string, pers
   });
 }
 
-async function cycleDecision(tx: Tx, plan: typeof keepInTouchPlans.$inferSelect, status: "completed" | "skipped" | "canceled", interactionId: string | null, decision: string) {
+async function cycleDecision(tx: NetworkTx, plan: typeof keepInTouchPlans.$inferSelect, status: "completed" | "skipped" | "canceled", interactionId: string | null, decision: string) {
   const cycleKey = String(plan.cycleNumber);
   await tx.insert(checkIns).values({
     userId: plan.userId, planId: plan.id, cycleKey, dueOn: plan.nextDueOn,
@@ -66,10 +70,10 @@ async function cycleDecision(tx: Tx, plan: typeof keepInTouchPlans.$inferSelect,
   });
 }
 
-export async function recordInteraction(userId: string, raw: z.input<typeof interactionInput>) {
+export async function recordInteraction(userId: string, raw: z.input<typeof interactionInput>, transaction?: NetworkTx) {
   const input = interactionInput.parse(raw);
   const requestHash = createHash("sha256").update(JSON.stringify(input)).digest("hex");
-  return db.transaction(async (tx) => {
+  return inTransaction(transaction, async (tx) => {
     await lockPeople(tx, userId, input.personIds);
     const [settings] = await tx.select().from(networkSettings).where(eq(networkSettings.userId, userId));
     const today = todayInTimezone(settings?.timezone ?? "Asia/Shanghai");
@@ -102,10 +106,10 @@ export async function recordInteraction(userId: string, raw: z.input<typeof inte
   });
 }
 
-export async function savePlan(userId: string, personId: string, raw: z.input<typeof planInput>) {
+export async function savePlan(userId: string, personId: string, raw: z.input<typeof planInput>, transaction?: NetworkTx) {
   z.string().uuid().parse(personId);
   const input = planInput.parse(raw);
-  return db.transaction(async (tx) => {
+  return inTransaction(transaction, async (tx) => {
     await lockPeople(tx, userId, [personId]);
     const [existing] = await tx.select().from(keepInTouchPlans)
       .where(and(eq(keepInTouchPlans.userId, userId), eq(keepInTouchPlans.personId, personId))).for("update");

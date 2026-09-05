@@ -19,7 +19,7 @@ Implement the full Network OS PRD through M1–M6, including secure private work
 | --- | --- | --- |
 | M0: baseline and design | In progress | Repo and objective inspected; branch created; initial security patches committed; remaining dependency assessment before deployment |
 | M1: people, circles, interactions, cadence | In progress | Storage, owner-scoped routes and working People/Circles/Person/Today UI implemented; 17 unit tests, 8 PostgreSQL tests and full desktop/mobile browser flow passed; production build, type checking and lint passed |
-| M2: interviews and reviewed memory | Not started | Persistent turns, grounded proposals, atomic review, correction |
+| M2: interviews and reviewed memory | In progress | Persistent turns and all eight proposal types implemented; atomic review, replay, grounding and ownership tests pass. Provider/jobs, API/UI, and source correction remain |
 | M3: Today and reconnecting | In progress | Due queue derives state on read; open loops, preferences, personal updates and optional grounded drafts remain |
 | M4: cohort import and voice | Not started | Roster source/reconciliation, private audio/transcription |
 | M5: UI and data controls | In progress | Core workspace browser-tested; complete interview/voice UI and export/deletion/privacy remain |
@@ -36,7 +36,7 @@ Implement the full Network OS PRD through M1–M6, including secure private work
 
 ## Continuation
 
-Next: implement M2 persistent interviews and reviewed proposals. Start with additive owner-scoped interview/turn/proposal/fact tables, durable revision-aware work, and atomic acceptance using the existing transactional relationship store. Then wire the interview/review UI and test reload, multi-person ambiguity, repeated acceptance, stale output, source grounding and privacy. Keep reviewing and committing small verified slices and record commit IDs below. AWS credit coverage, domain and model configuration are deployment inputs; they do not block local work.
+Next: wire the authenticated interview API and capture/review UI, then add the configured AI provider through durable revision-aware work with explicit processing consent. The storage boundary is implemented and tested; it is not yet a usable AI interview. Source correction/deletion and provenance in the profile remain required. Keep reviewing and committing small verified slices. AWS credit coverage, domain and model configuration are deployment inputs; they do not block local work.
 
 ## Checkpoints
 
@@ -64,7 +64,7 @@ Remote database connections require a valid certificate chain. Set `DATABASE_CA_
 - Audit after patches: 28 reported vulnerabilities (0 critical, 13 high, 12 moderate, 3 low). Remaining advisories include tooling/CLI dependencies, transitive fetch/image libraries and Next's bundled PostCSS. These still need reachability assessment and targeted fixes before deployment. Do not interpret reduced counts as a clean security audit or blindly upgrade to suggested older Drizzle tooling.
 - Production data, AWS resources and Neon remain untouched. No email/contact messages sent.
 
-## M1 workspace — verified core workflow
+## M1 workspace — `bce79e1`, verified core workflow
 
 - Owner-scoped people/circle/contact-plan routes and queries added; new People, Circles, Person and Today screens use the PRD notebook palette and responsive layout. Name-only creation, circle membership, contact logging, plan editing and snooze/skip/pause/resume are wired to PostgreSQL.
 - Keyword search covers names, email, organization, private profile notes, note bodies and interactions; 50-row pagination and archived filtering. Separate last outgoing/last mutual dates avoid implying replies. An outbound-only message no longer marks a person as met.
@@ -79,3 +79,11 @@ Remote database connections require a valid certificate chain. Set `DATABASE_CA_
 - Desktop Person and mobile People screenshots inspected. Refined mobile tools into a collapsed menu, tightened filter layout, and widened calendar-unit control. Added screenshots/overflow assertions for Today, Circle and Person at both sizes.
 - Final browser rerun passed (2.8 minutes including startup). Today, Circle, Person and People screenshots inspected; no mobile horizontal overflow. Production build, type checking and lint all passed. Exec session `38818` completed successfully; no build/dev process from this run remains active. Run build/dev checks sequentially against `.next`.
 - Added Playwright and Prettier as development dependencies; `npm run test:browser` runs the fixture-isolated browser suite with explicit TEST_DATABASE_URL. The tests use installed Chrome.
+
+## M2 interview storage checkpoint
+
+- Added owner-scoped interviews, ordered turns, participants, grounded proposals, confirmed facts, open loops and personal updates. Migration `0006_robust_marvex.sql` applied successfully only to the disposable local database; composite unique indexes precede foreign keys.
+- Session creation and turn saves are idempotent. Revision checks reject late model results; quotes must match current user-authored turns exactly. Unknown identities remain unresolved until explicit review. Model output cannot grant draft-sharing permission.
+- All eight proposal types accept individually in the same transaction as their materialized records. Repeated/concurrent acceptance cannot duplicate notes or group interactions. Stale plans, foreign destinations and sensitive sharing requests roll back without changing review state.
+- Verified 20 unit tests and 14 PostgreSQL integration tests, lint and production build. No UI changed in this checkpoint. These are synthetic storage/provider-boundary fixtures, not a real AI-provider test. No live database, AWS resource or private record changed.
+- Remaining M2: HTTP routes, capture/review UI, configured provider with consent and bounded durable execution, source corrections/forgetting, and timeline provenance. Full M1–M6 goal remains active.

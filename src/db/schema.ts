@@ -942,3 +942,131 @@ export const checkIns = pgTable("check_ins", {
   foreignKey({ columns: [t.planId, t.userId], foreignColumns: [keepInTouchPlans.id, keepInTouchPlans.userId] }).onDelete("cascade"),
   foreignKey({ columns: [t.interactionId, t.userId], foreignColumns: [interactions.id, interactions.userId] }),
 ]);
+
+// Interview content is private source material. Only reviewed proposals materialize memory.
+export const interviews = pgTable('interviews', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  requestKey: uuid('request_key').notNull(),
+  requestHash: text('request_hash').notNull(),
+  title: text('title').notNull(),
+  mode: text('mode').notNull(),
+  status: text('status').$type<'active' | 'paused' | 'reviewing' | 'completed' | 'discarded'>().notNull().default('active'),
+  revision: integer('revision').notNull().default(1),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('interviews_id_owner_uidx').on(t.id, t.userId),
+  uniqueIndex('interviews_owner_request_uidx').on(t.userId, t.requestKey),
+  index('interviews_owner_updated_idx').on(t.userId, t.updatedAt),
+  check('interviews_status_check', sql`${t.status} in ('active', 'paused', 'reviewing', 'completed', 'discarded')`),
+]);
+
+export const interviewPeople = pgTable('interview_people', {
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  interviewId: uuid('interview_id').notNull(),
+  personId: uuid('person_id').notNull(),
+}, (t) => [
+  uniqueIndex('interview_people_unique').on(t.interviewId, t.personId),
+  foreignKey({ columns: [t.interviewId, t.userId], foreignColumns: [interviews.id, interviews.userId] }).onDelete('cascade'),
+  foreignKey({ columns: [t.personId, t.userId], foreignColumns: [people.id, people.userId] }).onDelete('cascade'),
+]);
+
+export const interviewTurns = pgTable('interview_turns', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  interviewId: uuid('interview_id').notNull(),
+  requestKey: uuid('request_key').notNull(),
+  requestHash: text('request_hash').notNull(),
+  ordinal: integer('ordinal').notNull(),
+  role: text('role').$type<'user' | 'assistant'>().notNull(),
+  content: text('content').notNull(),
+  revision: integer('revision').notNull().default(1),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('interview_turns_id_owner_uidx').on(t.id, t.userId),
+  uniqueIndex('interview_turns_request_uidx').on(t.interviewId, t.requestKey),
+  uniqueIndex('interview_turns_ordinal_uidx').on(t.interviewId, t.ordinal),
+  foreignKey({ columns: [t.interviewId, t.userId], foreignColumns: [interviews.id, interviews.userId] }).onDelete('cascade'),
+  check('interview_turns_role_check', sql`${t.role} in ('user', 'assistant')`),
+]);
+
+export const memoryProposals = pgTable('memory_proposals', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  interviewId: uuid('interview_id').notNull(),
+  generationKey: uuid('generation_key').notNull(),
+  ordinal: integer('ordinal').notNull(),
+  payload: jsonb('payload').$type<import('../lib/network/interview-input').ProposalPayload>().notNull(),
+  sources: jsonb('sources').$type<import('../lib/network/interview-input').SourceQuote[]>().notNull(),
+  confidence: text('confidence').notNull().default('low'),
+  uncertainty: text('uncertainty').notNull().default(''),
+  sensitive: boolean('sensitive').notNull().default(true),
+  identityHints: jsonb('identity_hints').$type<string[]>().notNull().default([]),
+  unresolvedIdentity: boolean('unresolved_identity').notNull().default(false),
+  status: text('status').$type<'pending' | 'accepted' | 'rejected' | 'stale'>().notNull().default('pending'),
+  revision: integer('revision').notNull().default(1),
+  sourceRevision: integer('source_revision').notNull(),
+  reviewHash: text('review_hash'),
+  acceptedRef: jsonb('accepted_ref').$type<{ type: string; id: string }>(),
+  reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('memory_proposals_id_owner_uidx').on(t.id, t.userId),
+  uniqueIndex('memory_proposals_generation_uidx').on(t.interviewId, t.generationKey, t.ordinal),
+  index('memory_proposals_owner_status_idx').on(t.userId, t.status),
+  foreignKey({ columns: [t.interviewId, t.userId], foreignColumns: [interviews.id, interviews.userId] }).onDelete('cascade'),
+]);
+
+export const confirmedFacts = pgTable('confirmed_facts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  personId: uuid('person_id').notNull(),
+  proposalId: uuid('proposal_id'),
+  label: text('label').notNull(),
+  body: text('body').notNull(),
+  shareInDrafts: boolean('share_in_drafts').notNull().default(false),
+  status: text('status').$type<'active' | 'stale'>().notNull().default('active'),
+  revision: integer('revision').notNull().default(1),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('confirmed_facts_id_owner_uidx').on(t.id, t.userId),
+  foreignKey({ columns: [t.personId, t.userId], foreignColumns: [people.id, people.userId] }).onDelete('cascade'),
+  foreignKey({ columns: [t.proposalId, t.userId], foreignColumns: [memoryProposals.id, memoryProposals.userId] }),
+]);
+
+export const openLoops = pgTable('open_loops', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  personId: uuid('person_id').notNull(),
+  proposalId: uuid('proposal_id'),
+  body: text('body').notNull(),
+  dueOn: date('due_on'),
+  status: text('status').$type<'open' | 'done' | 'dismissed'>().notNull().default('open'),
+  revision: integer('revision').notNull().default(1),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index('open_loops_owner_due_idx').on(t.userId, t.status, t.dueOn),
+  foreignKey({ columns: [t.personId, t.userId], foreignColumns: [people.id, people.userId] }).onDelete('cascade'),
+  foreignKey({ columns: [t.proposalId, t.userId], foreignColumns: [memoryProposals.id, memoryProposals.userId] }),
+]);
+
+export const personalUpdates = pgTable('personal_updates', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  proposalId: uuid('proposal_id'),
+  title: text('title').notNull(),
+  body: text('body').notNull(),
+  happenedOn: date('happened_on'),
+  allowedPersonIds: jsonb('allowed_person_ids').$type<string[]>().notNull().default([]),
+  allowedCircleIds: jsonb('allowed_circle_ids').$type<string[]>().notNull().default([]),
+  revision: integer('revision').notNull().default(1),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  foreignKey({ columns: [t.proposalId, t.userId], foreignColumns: [memoryProposals.id, memoryProposals.userId] }),
+]);

@@ -153,3 +153,164 @@ test("an unanswered outgoing message is distinct from meeting or a mutual exchan
   assert.equal(record.person.lastOutboundOn, '2026-09-05');
   assert.equal(record.person.lastMutualOn, null);
 });
+
+// Interview integration fixtures are deliberately synthetic; no owner stories belong in tests.
+async function interviewFixture(personIds: string[] = [], content = 'Alex enjoys climbing. Sam is applying to graduate school. We talked on September 5.') {
+  const { createInterview, appendInterviewTurn } = await import('../../src/lib/network/interviews');
+  const interview = await createInterview(owner, { requestKey: randomUUID(), personIds });
+  const saved = await appendInterviewTurn(owner, interview.id, { requestKey: randomUUID(), revision: interview.revision, content });
+  const source = { turnId: saved.turn.id, revision: 1, start: 0, end: saved.turn.content.length, quote: saved.turn.content };
+  return { interview: saved.interview, turn: saved.turn, source };
+}
+
+test('interviews and turns are persistent, owner-scoped, revision-guarded and replay-safe', async () => {
+  const { createInterview, appendInterviewTurn, getInterview, changeInterviewStatus } = await import('../../src/lib/network/interviews');
+  const request = { requestKey: randomUUID(), title: 'Interview fixture' };
+  const [first, retry] = await Promise.all([createInterview(owner, request), createInterview(owner, request)]);
+  assert.equal(first.id, retry.id);
+  await assert.rejects(() => createInterview(owner, { ...request, title: 'Changed replay' }), conflict);
+  await assert.rejects(() => getInterview(stranger, first.id), notFound);
+  const input = { requestKey: randomUUID(), revision: first.revision, content: 'Private synthetic recollection' };
+  const [a, b] = await Promise.all([appendInterviewTurn(owner, first.id, input), appendInterviewTurn(owner, first.id, input)]);
+  assert.equal(a.turn.id, b.turn.id);
+  assert.equal((await getInterview(owner, first.id)).turns.length, 1);
+  await assert.rejects(() => appendInterviewTurn(owner, first.id, { ...input, requestKey: randomUUID() }), conflict);
+  const paused = await changeInterviewStatus(owner, first.id, { revision: a.interview.revision, status: 'paused' });
+  await assert.rejects(() => appendInterviewTurn(owner, first.id, { requestKey: randomUUID(), revision: paused.revision, content: 'Not saved while paused' }), conflict);
+  const resumed = await changeInterviewStatus(owner, first.id, { revision: paused.revision, status: 'active' });
+  await appendInterviewTurn(owner, first.id, { requestKey: randomUUID(), revision: resumed.revision, content: 'Continued fixture' });
+  assert.equal((await getInterview(owner, first.id)).turns.length, 2);
+});
+
+test('review creates one group event with separate private notes and atomic retry-safe acceptance', async () => {
+  const { publishInterviewGeneration, reviewMemoryProposal } = await import('../../src/lib/network/interviews');
+  const { interactionParticipants, notes: noteTable } = await import('../../src/db/schema');
+  const alex = await createPerson(owner, { name: 'Alex interview fixture' });
+  const sam = await createPerson(owner, { name: 'Sam interview fixture' });
+  const { interview, source } = await interviewFixture([alex.id, sam.id]);
+  const generation = { generationKey: randomUUID(), sourceRevision: interview.revision, assistant: 'What would you like to follow up on?', proposals: [
+    { payload: { kind: 'note' as const, personId: alex.id, body: 'Enjoys climbing', shareInDrafts: true }, sources: [{ ...source, end: 21, quote: 'Alex enjoys climbing.' }] },
+    { payload: { kind: 'note' as const, personId: sam.id, body: 'Applying to graduate school' }, sources: [source] },
+    { payload: { kind: 'interaction' as const, values: { requestKey: randomUUID(), personIds: [alex.id, sam.id], body: 'A shared conversation', channel: 'in_person' as const, datePrecision: 'day' as const, occurredOn: '2026-09-05', qualifiesForCadence: true } }, sources: [source] },
+  ] };
+  const result = await publishInterviewGeneration(owner, interview.id, generation);
+  const replay = await publishInterviewGeneration(owner, interview.id, generation);
+  assert.equal(result.assistant.id, replay.assistant.id); assert.equal(replay.proposals.length, 3);
+  assert.equal(result.proposals[0].payload.kind === 'note' && result.proposals[0].payload.shareInDrafts, false);
+  const command = { revision: result.proposals[0].revision, action: 'accept' as const };
+  const [a, b] = await Promise.all([reviewMemoryProposal(owner, interview.id, result.proposals[0].id, command), reviewMemoryProposal(owner, interview.id, result.proposals[0].id, command)]);
+  assert.equal(a.acceptedRef?.id, b.acceptedRef?.id);
+  await reviewMemoryProposal(owner, interview.id, result.proposals[1].id, { revision: 1, action: 'accept' });
+  const acceptedEvent = await reviewMemoryProposal(owner, interview.id, result.proposals[2].id, { revision: 1, action: 'accept' });
+  const links = await db.select().from(interactionParticipants).where(eq(interactionParticipants.interactionId, acceptedEvent.acceptedRef!.id));
+  assert.equal(links.length, 2);
+  const alexNotes = await db.select().from(noteTable).where(eq(noteTable.personId, alex.id));
+  assert.equal(alexNotes.length, 1); assert.equal(alexNotes[0].body, 'Enjoys climbing');
+  await assert.rejects(() => reviewMemoryProposal(stranger, interview.id, result.proposals[0].id, command), notFound);
+  await assert.rejects(() => reviewMemoryProposal(owner, interview.id, result.proposals[0].id, { ...command, action: 'reject' }), conflict);
+});
+
+test('unsupported sources and late model results cannot create proposals or assistant turns', async () => {
+  const { publishInterviewGeneration, appendInterviewTurn, getInterview } = await import('../../src/lib/network/interviews');
+  const { interview, source } = await interviewFixture();
+  const input = { generationKey: randomUUID(), sourceRevision: interview.revision, assistant: 'A fixture question?', proposals: [{ payload: { kind: 'note' as const, body: 'A suggested note' }, sources: [{ ...source, quote: 'An invented quote' }] }] };
+  await assert.rejects(() => publishInterviewGeneration(owner, interview.id, input));
+  assert.equal((await getInterview(owner, interview.id)).turns.length, 1);
+  await appendInterviewTurn(owner, interview.id, { requestKey: randomUUID(), revision: interview.revision, content: 'New context arrived' });
+  await assert.rejects(() => publishInterviewGeneration(owner, interview.id, { ...input, proposals: [{ payload: { kind: 'note', body: 'A suggested note' }, sources: [source] }] }), conflict);
+  assert.equal((await getInterview(owner, interview.id)).proposals.length, 0);
+});
+
+test('unresolved identities, changed sources and foreign destinations block acceptance without partial writes', async () => {
+  const { publishInterviewGeneration, reviewMemoryProposal, getInterview } = await import('../../src/lib/network/interviews');
+  const { interviewTurns } = await import('../../src/db/schema');
+  const person = await createPerson(owner, { name: 'Resolved fixture' });
+  const foreign = await createPerson(stranger, { name: 'Foreign destination fixture' });
+  const { interview, turn, source } = await interviewFixture();
+  const { proposals } = await publishInterviewGeneration(owner, interview.id, { generationKey: randomUUID(), sourceRevision: interview.revision, assistant: 'Which Alex do you mean?', proposals: [{ payload: { kind: 'note', body: 'Enjoys climbing' }, identityHints: ['Alex'], sources: [source] }] });
+  const proposal = proposals[0]; assert.equal(proposal.unresolvedIdentity, true);
+  await assert.rejects(() => reviewMemoryProposal(owner, interview.id, proposal.id, { revision: 1, action: 'accept' }), conflict);
+  await assert.rejects(() => reviewMemoryProposal(owner, interview.id, proposal.id, { revision: 1, action: 'accept', identityConfirmed: true, payload: { kind: 'note', personId: foreign.id, body: 'Enjoys climbing' } }), notFound);
+  await db.update(interviewTurns).set({ revision: 2, content: 'Corrected fixture' }).where(eq(interviewTurns.id, turn.id));
+  await assert.rejects(() => reviewMemoryProposal(owner, interview.id, proposal.id, { revision: 1, action: 'accept', identityConfirmed: true, payload: { kind: 'note', personId: person.id, body: 'Enjoys climbing' } }), conflict);
+  assert.equal((await getInterview(owner, interview.id)).proposals[0].status, 'pending');
+});
+
+test('each supported memory type materializes only after individual review and retains its provenance', async () => {
+  const { publishInterviewGeneration, reviewMemoryProposal, getInterview, changeInterviewStatus } = await import('../../src/lib/network/interviews');
+  const { confirmedFacts, openLoops, personalUpdates, interviewPeople } = await import('../../src/db/schema');
+  const person = await createPerson(owner, { name: 'Memory types fixture' });
+  const circle = await createCircle(owner, { name: `Memory circle ${randomUUID()}` });
+  const { interview, source } = await interviewFixture([person.id], 'I met Taylor through this circle. Taylor enjoys climbing. Remind me to share a paper on September 12, then check in every three months. I started a new course.');
+  const { proposals } = await publishInterviewGeneration(owner, interview.id, {
+    generationKey: randomUUID(), sourceRevision: interview.revision, assistant: 'Which of these memories would you like to keep?',
+    proposals: [
+      { payload: { kind: 'new_person', values: { name: 'Taylor new person fixture' } }, sources: [source] },
+      { payload: { kind: 'profile_fact', personId: person.id, label: 'Interest', body: 'Climbing' }, sources: [source] },
+      { payload: { kind: 'plan', personId: person.id, values: { nextDueOn: '2026-12-05' } }, sources: [source] },
+      { payload: { kind: 'circle_membership', personId: person.id, circleId: circle.id }, sources: [source] },
+      { payload: { kind: 'open_loop', personId: person.id, body: 'Share a paper', dueOn: '2026-09-12' }, sources: [source] },
+      { payload: { kind: 'personal_update', title: 'A new course', body: 'Started a course', allowedPersonIds: [person.id] }, sources: [source] },
+    ],
+  });
+  assert.equal((await db.select().from(confirmedFacts).where(eq(confirmedFacts.personId, person.id))).length, 0);
+  assert.equal((await db.select().from(keepInTouchPlans).where(eq(keepInTouchPlans.personId, person.id))).length, 0);
+  const beforeReview = await getInterview(owner, interview.id);
+  await assert.rejects(() => changeInterviewStatus(owner, interview.id, { revision: beforeReview.interview.revision, status: 'completed' }), conflict);
+  for (const proposal of proposals) {
+    const accepted = await reviewMemoryProposal(owner, interview.id, proposal.id, { revision: 1, action: 'accept' });
+    const retry = await reviewMemoryProposal(owner, interview.id, proposal.id, { revision: 1, action: 'accept' });
+    assert.deepEqual(accepted.acceptedRef, retry.acceptedRef);
+    assert.equal(accepted.status, 'accepted');
+    assert.deepEqual(accepted.sources, [source]);
+  }
+  const [fact] = await db.select().from(confirmedFacts).where(eq(confirmedFacts.personId, person.id));
+  assert.equal(fact.proposalId, proposals[1].id); assert.equal(fact.shareInDrafts, false);
+  const [plan] = await db.select().from(keepInTouchPlans).where(eq(keepInTouchPlans.personId, person.id));
+  assert.equal(plan.intervalUnit, 'months'); assert.equal(plan.intervalCount, 3); assert.equal(plan.lastContactOn, null);
+  const [membership] = await db.select().from(circleMembers).where(and(eq(circleMembers.circleId, circle.id), eq(circleMembers.personId, person.id)));
+  assert.ok(membership);
+  const [loop] = await db.select().from(openLoops).where(eq(openLoops.proposalId, proposals[4].id));
+  assert.equal(loop.dueOn, '2026-09-12'); assert.equal(loop.status, 'open');
+  const [update] = await db.select().from(personalUpdates).where(eq(personalUpdates.proposalId, proposals[5].id));
+  assert.deepEqual(update.allowedPersonIds, []); assert.deepEqual(update.allowedCircleIds, []);
+  const links = await db.select().from(interviewPeople).where(eq(interviewPeople.interviewId, interview.id));
+  assert.equal(links.length, 2);
+  const current = await getInterview(owner, interview.id);
+  const completed = await changeInterviewStatus(owner, interview.id, { revision: current.interview.revision, status: 'completed' });
+  assert.equal(completed.status, 'completed');
+});
+
+test('stale plan edits and foreign circles roll back review; sensitive context cannot be shared', async () => {
+  const { publishInterviewGeneration, reviewMemoryProposal, getInterview } = await import('../../src/lib/network/interviews');
+  const { confirmedFacts, personalUpdates } = await import('../../src/db/schema');
+  const person = await createPerson(owner, { name: 'Atomic review fixture' });
+  const plan = await savePlan(owner, person.id, { nextDueOn: '2026-09-05' });
+  const foreignCircle = await createCircle(stranger, { name: `Foreign circle ${randomUUID()}` });
+  const { interview, source } = await interviewFixture([person.id]);
+  const { proposals } = await publishInterviewGeneration(owner, interview.id, {
+    generationKey: randomUUID(), sourceRevision: interview.revision, assistant: 'Review these details?',
+    proposals: [
+      { payload: { kind: 'plan', personId: person.id, values: { nextDueOn: '2026-12-05', revision: plan.revision } }, sources: [source] },
+      { payload: { kind: 'profile_fact', personId: person.id, label: 'Interest', body: 'Climbing' }, sources: [source] },
+      { payload: { kind: 'personal_update', title: 'A course', body: 'Started a course' }, sources: [source] },
+    ],
+  });
+  await savePlan(owner, person.id, { nextDueOn: '2027-01-10', revision: plan.revision });
+  await assert.rejects(() => reviewMemoryProposal(owner, interview.id, proposals[0].id, { revision: 1, action: 'accept' }), conflict);
+  const [unchanged] = await db.select().from(keepInTouchPlans).where(eq(keepInTouchPlans.id, plan.id));
+  assert.equal(unchanged.nextDueOn, '2027-01-10'); assert.equal(unchanged.revision, 2);
+  await assert.rejects(() => reviewMemoryProposal(owner, interview.id, proposals[1].id, {
+    revision: 1, action: 'accept', payload: { kind: 'profile_fact', personId: person.id, label: 'Interest', body: 'Climbing', shareInDrafts: true },
+  }), (error: unknown) => error instanceof NetworkError && error.status === 400);
+  assert.equal((await db.select().from(confirmedFacts).where(eq(confirmedFacts.proposalId, proposals[1].id))).length, 0);
+  await assert.rejects(() => reviewMemoryProposal(owner, interview.id, proposals[2].id, {
+    revision: 1, action: 'accept', sensitive: false,
+    payload: { kind: 'personal_update', title: 'A course', body: 'Started a course', allowedCircleIds: [foreignCircle.id] },
+  }), notFound);
+  assert.equal((await db.select().from(personalUpdates).where(eq(personalUpdates.proposalId, proposals[2].id))).length, 0);
+  assert.ok((await getInterview(owner, interview.id)).proposals.every((proposal) => proposal.status === 'pending' && proposal.acceptedRef === null));
+  const rejected = await reviewMemoryProposal(owner, interview.id, proposals[0].id, { revision: 1, action: 'reject' });
+  assert.equal(rejected.status, 'rejected');
+  assert.equal((await reviewMemoryProposal(owner, interview.id, proposals[0].id, { revision: 1, action: 'reject' })).revision, rejected.revision);
+});
