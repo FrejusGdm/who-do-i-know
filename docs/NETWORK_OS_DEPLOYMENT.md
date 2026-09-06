@@ -1,6 +1,6 @@
 # Network OS deployment
 
-The application branch has been pushed through `1307648`. On 2026-09-06 the owner authorized deployment using an AWS-provided HTTPS link, with a custom domain later. The artifact stack is deployed and the network stack is being created; the application image and live smoke tests are still pending. The existing Elastic Beanstalk environment and certificate belong to another application and remain untouched.
+The application branch has been pushed through `e8d62e9`. On 2026-09-06 the owner authorized deployment using an AWS-provided HTTPS link, with a custom domain later. Both AWS stacks are created. The image build passed and service startup is underway at `https://d3p6ii3tjocl55.cloudfront.net`; live smoke checks are pending. The existing Elastic Beanstalk environment and certificate belong to another application and remain untouched.
 
 ## First deployment and cost
 
@@ -28,7 +28,7 @@ Keep secrets and personal identities out of Git, CDK context, logs and build inp
 
 - No owned hostname is required initially. For a future custom domain, use an issued ACM certificate in the target account in us-east-1 and add its validation record through the actual DNS provider. No unrelated certificate may be reused.
 - A Secrets Manager JSON secret in the target account/region containing `DATABASE_URL`, `BETTER_AUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `PRIVATE_USER_EMAILS`, `OPENROUTER_API_KEY`, and `NETWORK_INTERVIEW_MODEL`. The auth secret must be strong; the allowlist must contain the owner's chosen verified identity. Empty provider/model values keep AI unavailable until a tested configuration is supplied. The worker does not receive Google client credentials or the auth secret.
-- Google OAuth authorized JavaScript origin `https://<hostname>` and redirect URI `https://<hostname>/api/auth/callback/google`. Production sign-in must be tested with the intended owner, not only with synthetic fixtures.
+- Google OAuth authorized JavaScript origin `https://d3p6ii3tjocl55.cloudfront.net` and redirect URI `https://d3p6ii3tjocl55.cloudfront.net/api/auth/callback/google`. Production sign-in must be tested with the intended owner, not only with synthetic fixtures.
 - Reviewed database migrations through `0012`, preceded by an inventory, consistent backup, successful restore rehearsal and current-schema compatibility checks. Do not run `db:push`, run migrations inside a container build, or point integration tests at the live database.
 
 Existing local configuration uses localhost, lacks the owner allowlist/model, and the earlier provider smoke test returned HTTP 401. Those are unresolved settings, not production credentials that have been validated.
@@ -44,7 +44,7 @@ Existing local configuration uses localhost, lacks the owner allowlist/model, an
 5. After the backup/restore/migration checks and runtime secret setup, synthesize/diff `NetworkOs` with context `secretArn`, `cloudFrontPrefixListId`, and `imageTag` (full reviewed commit ID). Optional `hostname` and `certificateArn` must be provided together. Initially provision with `startServices=false`, then update to the built image and start both tasks. A custom domain can later point to `DnsTarget`. Wait for both services to become healthy. No runtime migration runs automatically.
 6. Check HTTPS, `/api/health`, unauthenticated private API rejection, real owner sign-in, private-page persistence, a non-owner rejection, and the configured worker. Restart/redeploy a task and confirm saved data and queued interview work survive. Report the actual URL and image digest only after those checks succeed.
 
-The public health endpoint returns only `{ "status": "ok" }`; it is process liveness, not proof of database, OAuth, AI, imports or complete v1 readiness. Container build, cloud smoke test and real sign-in remain unexecuted until deployment inputs are resolved.
+The public health endpoint returns only `{ "status": "ok" }`; it is process liveness, not proof of database, OAuth, AI, imports or complete v1 readiness. The exact-commit container build passed. Real owner sign-in remains unverified and closed.
 
 ## Remaining release work
 
@@ -62,3 +62,15 @@ Rollback uses a previously retained image tag only when its code remains compati
 - Neon project `little-dust-60821577`: preserved no-compute branch `br-super-dream-amz2n2ib` from production `br-old-fog-amk1paaf`; deployment branch `br-aged-poetry-amxari71` cloned from that preserved branch. Neither original nor preserved branch was migrated. Deployment compute is 0.25 CU; account settings did not permit changing suspend timeout, so automatic suspension is not assumed.
 - Existing migration journal ended at 0002 although archive tables already existed. All columns/defaults/types, constraints and indexes for the eight affected tables matched the disposable tested schema. On the deployment branch only, one locked transaction reconciled journal 0003–0004 and applied 0005–0012. All 27 original public table counts match the source afterward; no unvalidated constraints remain. Native PostgreSQL from the deployed app still needs verification; local migration used Neon HTTPS transactions.
 - Runtime configuration uses the deployment branch and a fresh auth secret. AI is disabled pending a working provider configuration. Owner email is pending: the database has three accounts, so none was inferred as the owner; production sign-in remains closed. Google callback setup must use the actual CloudFront URL once allocated. No mailbox import or message sending has occurred.
+
+
+## OS scan assessment
+
+The initial ECR OS scan for `0e15861` found 3 critical, 12 high and 5 medium entries. A rebuild updates available Debian packages; the security repository supplies PCRE2 `10.42-1+deb12u1` but not fixes for all remaining findings. Do not report a clean scan.
+
+The three critical entries are in Perl: [Storable deserialization](https://security-tracker.debian.org/tracker/CVE-2026-57433), [Socket packing](https://security-tracker.debian.org/tracker/CVE-2026-12087), and [regular-expression matching](https://security-tracker.debian.org/tracker/CVE-2026-13221). Repository application and worker source contain no Perl or child-process invocation; these affected APIs are not part of the application's request path. The util-linux findings require local utility execution; runtime is non-root, ECS Exec is disabled, and the app provides no shell/subprocess interface. This is a reachability assessment, not removal of vulnerable installed packages.
+
+The [zlib advisory](https://security-tracker.debian.org/tracker/CVE-2026-85091) describes non-blocking gzwrite/gzprintf buffer handling. The tracker marks Bookworm unresolved and asks for further detail despite describing a newer upstream version range. Application source does not use that gzip-file API. Keep this as an unresolved upstream/reachability exception rather than claiming a confirmed false positive. Sign-in remains closed pending owner/OAuth setup; no private release acceptance is claimed before real authentication checks.
+
+
+Final release image: `e8d62e9b009fb24898abe47ae9faa6b7c7a5a94d`, digest `sha256:2173ad5f3c89743d2f822167124d74d54b9772a075587ff2b57ede8b9b524bc7`. CodeBuild `a6f4ac85-e283-42c6-a8a0-cbecc03253a2` succeeded from source version `lQfdc.0OYANV30Wi.8V2i_IqBjBFsdB2`. ECR scan completed: 3 critical, 11 high, 5 medium; PCRE2 finding resolved, remaining exceptions assessed above. This is not a zero-vulnerability release. NetworkOs update changes only image task definitions and desired counts from zero to one. Google Cloud Console requires owner reauthentication; no callback edit has been made, and no owner identity was inferred from the signed-in browser.

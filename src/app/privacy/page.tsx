@@ -3,7 +3,7 @@ export default function PrivacyPage() {
     <main className="min-h-screen bg-[--brand-cream] py-24 px-6">
       <div className="max-w-2xl mx-auto">
         <h1 className="font-serif text-5xl md:text-6xl tracking-tight text-[--brand-ink] mb-4">Privacy Policy</h1>
-        <p className="text-lg font-light text-[--brand-muted] mb-16">Last updated: May 2026</p>
+        <p className="text-lg font-light text-[--brand-muted] mb-16">Last updated: September 2026</p>
 
         <div className="space-y-12 text-[--brand-muted] leading-relaxed">
           <p>
@@ -41,7 +41,7 @@ export default function PrivacyPage() {
               Data We Store
             </h2>
             <ul className="list-disc list-inside space-y-3 text-lg">
-              <li>Your email address (to deliver your download link)</li>
+              <li>Your account identity and sign-in sessions</li>
               <li>Job status (pending/processing/complete)</li>
               <li>
                 Your Gmail relationship memory: people, contact methods,
@@ -62,7 +62,7 @@ export default function PrivacyPage() {
             </h2>
             <ul className="list-disc list-inside space-y-3 text-lg">
               <li>
-                Google OAuth access tokens after processing completes
+                Your Google account password
               </li>
               <li>
                 AI provider keys supplied through BYOK mode
@@ -79,8 +79,7 @@ export default function PrivacyPage() {
             </h2>
             <p className="text-lg">
               You can request deletion of stored relationship data at any time.
-              Google OAuth access tokens are deleted immediately after
-              processing completes. CSV download files may be removed or expire
+              OAuth tokens may be retained with your connected account for sign-in and authorized access. Completing an import does not automatically delete your account or stored relationship data. CSV download files may be removed or expire
               separately from the database-backed relationship memory.
             </p>
           </section>
@@ -98,8 +97,7 @@ export default function PrivacyPage() {
                 relationship-memory product you requested
               </li>
               <li>
-                Google OAuth access tokens are revoked and deleted immediately
-                after processing completes
+                Account access is restricted by server-side authorization; OAuth tokens are not exposed in the public interface
               </li>
               <li>
                 BYOK API keys are used for the current request and are not saved
@@ -161,7 +159,9 @@ export default function PrivacyPage() {
                 analysis. These providers have stated that API data is not used
                 for model training.
               </li>
-              <li>Vercel: hosting and temporary file storage</li>
+              <li>AWS: application hosting, background jobs, logs, and runtime configuration</li>
+              <li>Neon: PostgreSQL storage for accounts and private relationship data</li>
+              <li>Vercel Blob: file storage when configured for legacy import and export workflows</li>
             </ul>
           </section>
 

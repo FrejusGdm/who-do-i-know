@@ -46,7 +46,7 @@ export async function sendDownloadEmail(
           Download CSV
         </a>
         <p style="color: #8C7B6B; font-size: 12px; margin-top: 32px;">
-          Your data will be permanently deleted after download or within 15 minutes.
+          Download links may expire separately from your saved relationship data. Downloading does not delete your private workspace.
         </p>
       </div>
     `,

@@ -6,18 +6,18 @@ import { Shield, Trash2, Eye } from "lucide-react";
 const badges = [
   {
     icon: Eye,
-    title: "100% Read-Only",
-    description: "We never send emails or modify your account. We only read history to map your network.",
+    title: "Your outreach",
+    description: "Keep track of when to reconnect. The app does not send messages to your contacts.",
   },
   {
     icon: Trash2,
-    title: "0 Data Retained",
-    description: "Your entire dataset is permanently purged from our servers within 15 minutes of processing.",
+    title: "Saved memory",
+    description: "Your notes and relationship history are saved in your private workspace for future conversations.",
   },
   {
     icon: Shield,
-    title: "No Account Needed",
-    description: "Pay once, download, and you're done. We deliberately forget everything about you.",
+    title: "Private access",
+    description: "An authorized account is required to open your workspace and read your relationship notes.",
   },
 ];
 

@@ -220,3 +220,10 @@ Cloud build 1055d29 failed during TypeScript checking with V8 heap exhaustion ar
 ### Container scan follow-up
 
 The corrected build `6b3d61c7-47b9-4209-97b8-c37c40b52169` succeeded for `0e15861` from source version `Sd.HGJPvvjGSWJVmjgtffsANJ_C9BLrb`. ECR digest `sha256:f0363f8e307ad11e781a42e454316149d0c284a809bc433604338a6523605ad3` scanned with 3 critical/12 high/5 medium operating-system findings (Perl, util-linux, PCRE2, zlib). No running service uses this image. Refresh installed Debian security packages in a shared base stage and rebuild/rescan before release. This cleanup occurs inside the container image, not on the owner’s filesystem. CloudFront allocated `https://d3p6ii3tjocl55.cloudfront.net`; private origin is deployed and final stack creation is completing. URL not yet app-verified.
+
+
+### Live verification and retention-copy correction
+
+Release e8d62e9 is running: one web task and one interview worker. HTTPS homepage and exact health route return 200; unauthenticated people API returns 401, untrusted POST and health POST return 403. A short-lived AWS task verified native PostgreSQL with authorized TLS and all 13 migration records; it logged only those checks. Original Neon remains unchanged.
+
+Live browser inspection caught inherited landing claims of zero retained data/no account and privacy claims of automatic OAuth-token deletion, inconsistent with persistent accounts and notes. Correct only those factual claims and the unused legacy download-email footer; no email is sent. Google console requires reauthentication, so callback remains unconfigured and private owner allowlist empty. Full private sign-in acceptance remains pending. Final OS scan for e8d62e9: 3 critical/11 high/5 medium, with documented upstream reachability exceptions in deployment notes.
