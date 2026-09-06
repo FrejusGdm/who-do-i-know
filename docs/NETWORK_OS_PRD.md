@@ -122,6 +122,16 @@ V1 allows editing, copying, and opening the external email composer where an add
 
 Search people by name, circle, interests, institution, and note text. Opening a person shows concise relationship context with evidence, timeline, open loops, and the active plan. Search is usable without an LLM. Optional natural-language retrieval uses owner-scoped records and links to its evidence; it can say it lacks context.
 
+### F. Onboard mentors from a selected email conversation after deployment
+
+The owner wants the deployed web app and its working URL first, then to connect one chosen email account and start mentor onboarding from a specific farewell/staying-connected email subject supplied in the private conversation. Keep the exact subject, mailbox identity and message contents out of versioned specifications. Do not fetch mail before this deployment-first handoff or assume the account used for app sign-in is the intended mailbox.
+
+Offer a separate, explicit read-only mailbox connection. Preview subject matches so the owner can select the intended conversation(s) before importing their contents. Start with those selected threads; expanding into other correspondence requires a visible scope choice. Show direct participants and identity matches, exclude the owner's addresses, distinguish group recipients and quoted addresses, and require reconciliation before creating or merging people. The owner has identified this group as mentors; support different mentor relationships without inventing subtypes from message text.
+
+Preserve message/thread provenance, direction and actual dates. Importing a thread must not mark someone as met, infer a mutual exchange from an unanswered message, or reset a contact plan. Offer the existing review and interview workflows to confirm meaningful contact, relationship context and a three-calendar-month cadence. Repeated imports must not duplicate people or evidence. Imported text remains untrusted data and cannot authorize actions or broaden access. Never send email as part of connection, import or onboarding.
+
+Acceptance includes separate login/mail consent, wrong-account recovery, ambiguous subject matches, duplicate import, group recipients, owner isolation, expired/revoked credentials, and source deletion invalidating derived memories. This is an additional post-deployment onboarding requirement, not evidence that mailbox connection or ingestion is already implemented.
+
 ## 6. Functional requirements
 
 | ID | Requirement | Acceptance |
@@ -130,6 +140,7 @@ Search people by name, circle, interests, institution, and note text. Opening a 
 | P02 | Many-to-many circles and cohort metadata | One person can be both a classmate and another circle member without duplicate identity |
 | P03 | Preview and reconcile roster imports | Repeated input is idempotent; duplicates and invalid rows are visible; original records are preserved |
 | P04 | Person timeline with provenance | User can distinguish imported data, user notes, confirmed interactions, and AI suggestions |
+| E01 | Post-deployment mentor onboarding from selected email threads | Explicit mailbox connection, subject-match preview, reconciled mentor identities, idempotent provenance and reviewed contact dates; no automatic sending |
 | I01 | Persistent multi-person text interviews | Reload resumes the same session without losing saved turns |
 | I02 | Review individual AI proposals | Accept/reject/edit each item; retrying acceptance cannot duplicate a note or interaction |
 | I03 | Voice recording and transcription | Browser permission, recording indicator, stop/cancel, transcript edit, typed fallback, retry without duplicate import |
