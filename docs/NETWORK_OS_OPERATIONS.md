@@ -82,3 +82,11 @@ Commitment changes invalidate unfinished work for related interviews. The origin
 Person includes explicit relationship intention, natural topics, preferred formats/language and draft exclusions. Blank fields mean no preference, and clearing a field replaces its previous value. Saving never changes relationship type, met state, interaction history or cadence. Archived people retain read-only preferences.
 
 Migration `0011_conversation_preferences.sql` adds owner/person-scoped preferences and hash-only retry receipts. Concurrent saves serialize, stale revisions are rejected, and a replay returns current choices rather than restoring older text. The editor keeps uncertain saves in memory for retry; a stale tab can reload confirmed choices explicitly. These fields currently support the owner's manual planning. The optional drafting slice must apply exclusions and track this preference revision before using them; no new interview or outreach model consumer is enabled here.
+
+## Personal-update library
+
+`/updates` provides a paginated private library with create/edit/remove controls and links to originating interviews. New updates have no draft audience. Selecting a person or circle is explicit permission for future draft use; a circle includes current and future members. The future draft flow must still require update selection and recheck both ownership and current membership before context collection/publication. The library does not send messages or enable a new model consumer.
+
+Migration `0012_personal_update_controls.sql` adds deletion tombstones and hash-only request receipts. Removal clears title, body, date and audience; original interview words remain. Source correction still removes its materialized update completely, while receipts prevent old requests from recreating it. Edits/removal invalidate unfinished originating interview work; its reviewed summaries use current update text or a removed marker. Shared interview invalidation now lives in `src/lib/network/interview-invalidation.ts`.
+
+Draft generation must track each selected update's revision, person/circle audience and circle membership. Changing or removing any of those must invalidate dependent draft output, including output already stored. Do not implement this solely as an instruction to the model.

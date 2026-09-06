@@ -67,6 +67,7 @@ export function NetworkShell({
             className="flex flex-wrap gap-x-5 md:flex-col md:gap-1"
           >
             {[
+              ["/updates", "Personal updates"],
               ["/filter", "Gmail import"],
               ["/imports/linkedin", "LinkedIn import"],
               ["/archive", "Google archive"],
@@ -91,6 +92,7 @@ export function NetworkShell({
             className="flex flex-wrap gap-x-5 md:flex-col md:gap-1"
           >
             {[
+              ["/updates", "Personal updates"],
               ["/filter", "Gmail import"],
               ["/imports/linkedin", "LinkedIn import"],
               ["/archive", "Google archive"],
@@ -139,7 +141,9 @@ export function PageHeading({
     <header className="mb-8 flex flex-col gap-5 border-b border-[#deded5] pb-7 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
         {eyebrow && <p className="mb-3 text-sm text-[#62685e]">{eyebrow}</p>}
-        <h1 className="break-words font-serif text-4xl text-balance">{title}</h1>
+        <h1 className="break-words font-serif text-4xl text-balance">
+          {title}
+        </h1>
         <p className="mt-3 max-w-xl text-pretty leading-6 text-[#62685e]">
           {description}
         </p>

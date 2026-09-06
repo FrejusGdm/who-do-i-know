@@ -980,3 +980,100 @@ test('a failed preference save cannot leave a partial new revision', async () =>
   }
   assert.deepEqual(await personPreferences(owner, person.id), original);
 });
+
+test('personal updates start private, validate audience ownership, and cannot be revived by old saves', async () => {
+  const { createPersonalUpdate, changePersonalUpdate, listPersonalUpdates } = await import('../../src/lib/network/personal-updates');
+  const mine = await createPerson(owner, { name: 'Update audience fixture' });
+  const foreign = await createPerson(stranger, { name: 'Private foreign audience' });
+  const circle = await createCircle(owner, { name: 'Update circle', kind: 'circle' });
+  const foreignCircle = await createCircle(stranger, { name: 'Private foreign circle', kind: 'circle' });
+  const input = { requestKey: randomUUID(), title: 'Synthetic life update', body: 'A synthetic reflection' };
+  const [created, duplicate] = await Promise.all([createPersonalUpdate(owner, input), createPersonalUpdate(owner, input)]);
+  assert.equal(created.id, duplicate.id); assert.deepEqual(created.allowedPersonIds, []); assert.deepEqual(created.allowedCircleIds, []);
+  await assert.rejects(() => createPersonalUpdate(owner, { ...input, requestKey: randomUUID(), allowedPersonIds: [mine.id, foreign.id] }), notFound);
+  await assert.rejects(() => createPersonalUpdate(owner, { ...input, requestKey: randomUUID(), allowedCircleIds: [foreignCircle.id] }), notFound);
+  await assert.rejects(() => changePersonalUpdate(stranger, created.id, { requestKey: randomUUID(), revision: 1, action: 'remove' }), notFound);
+  const edit = { requestKey: randomUUID(), revision: 1, action: 'edit' as const, title: 'Current synthetic update', body: 'Current reflection', happenedOn: '2026-09-06', allowedPersonIds: [mine.id], allowedCircleIds: [circle.id] };
+  const current = await changePersonalUpdate(owner, created.id, edit);
+  assert.deepEqual(current.allowedPersonIds, [mine.id]);
+  assert.equal((await listPersonalUpdates(stranger)).updates.some(row => row.id === created.id), false);
+  const listing = await listPersonalUpdates(owner); assert.ok(listing.updates.some(row => row.id === created.id));
+  assert.ok(listing.people.some(row => row.id === mine.id)); assert.equal(listing.people.some(row => row.id === foreign.id), false);
+  await assert.rejects(() => changePersonalUpdate(owner, created.id, { ...edit, requestKey: randomUUID() }), conflict);
+  await assert.rejects(() => createPersonalUpdate(owner, { ...input, body: 'Different retry' }), conflict);
+  const removed = await changePersonalUpdate(owner, created.id, { requestKey: randomUUID(), revision: 2, action: 'remove' });
+  assert.equal(removed.title, ''); assert.equal(removed.body, ''); assert.deepEqual(removed.allowedPersonIds, []); assert.ok(removed.deletedAt);
+  assert.ok((await createPersonalUpdate(owner, input)).deletedAt);
+  assert.ok((await changePersonalUpdate(owner, created.id, edit)).deletedAt);
+  assert.equal((await listPersonalUpdates(owner)).updates.some(row => row.id === created.id), false);
+  await assert.rejects(() => changePersonalUpdate(owner, created.id, { ...edit, requestKey: randomUUID(), revision: 3 }), notFound);
+});
+
+test('update edits and removal invalidate originating AI work and its current reviewed context', async () => {
+  const { changePersonalUpdate } = await import('../../src/lib/network/personal-updates');
+  const { publishInterviewGeneration, reviewMemoryProposal, getInterview } = await import('../../src/lib/network/interviews');
+  const { queueInterview, claimInterviewJob, interviewJobContext, finishInterviewJob } = await import('../../src/lib/network/interview-jobs');
+  const { aiProcessingTasks, networkAiUsage } = await import('../../src/db/schema');
+  await db.delete(aiProcessingTasks).where(eq(aiProcessingTasks.userId, owner));
+  await db.delete(networkAiUsage).where(eq(networkAiUsage.userId, owner));
+  process.env.PRIVATE_USER_EMAILS = `${owner}@example.test`; await enableInterviewAI();
+  const { interview, source } = await interviewFixture([], 'Synthetic update recollection');
+  const generation = await publishInterviewGeneration(owner, interview.id, { generationKey: randomUUID(), sourceRevision: interview.revision, assistant: 'Synthetic update question', proposals: [{ payload: { kind: 'personal_update', title: 'Old synthetic title', body: 'Old synthetic update' }, sources: [source] }] });
+  const reviewed = await reviewMemoryProposal(owner, interview.id, generation.proposals[0].id, { action: 'accept', revision: 1 });
+  const updateId = reviewed.acceptedRef!.id;
+  async function claim() {
+    const current = await getInterview(owner, interview.id);
+    await queueInterview(owner, interview.id, { requestKey: randomUUID(), revision: current.interview.revision });
+    const job = await claimInterviewJob(owner); assert.ok(job); return job;
+  }
+  const stale = await claim(); assert.ok(JSON.stringify(await interviewJobContext(stale)).includes('Old synthetic update'));
+  await changePersonalUpdate(owner, updateId, { requestKey: randomUUID(), revision: 1, action: 'edit', title: 'Current synthetic title', body: 'Current synthetic update' });
+  assert.equal(await finishInterviewJob(stale, await fixtureReply()), false);
+  const current = await claim();
+  const context = await interviewJobContext(current);
+  assert.ok(context.reviewed.some(row => row.summary.includes('Current synthetic update')));
+  assert.equal(context.reviewed.some(row => row.summary.includes('Old synthetic update')), false);
+  await changePersonalUpdate(owner, updateId, { requestKey: randomUUID(), revision: 2, action: 'remove' });
+  assert.equal(await finishInterviewJob(current, await fixtureReply()), false);
+  const after = await claim(); const removed = await interviewJobContext(after);
+  assert.ok(removed.reviewed.some(row => row.kind === 'personal_update' && row.summary.includes('removed')));
+  await finishInterviewJob(after, await fixtureReply());
+});
+
+test('update audience failure rolls back source revision and source deletion preserves anti-replay receipts', async () => {
+  const { createPersonalUpdate, changePersonalUpdate } = await import('../../src/lib/network/personal-updates');
+  const { publishInterviewGeneration, reviewMemoryProposal, getInterview } = await import('../../src/lib/network/interviews');
+  const { previewInterviewCorrection, correctInterviewTurn } = await import('../../src/lib/network/interview-corrections');
+  const { personalUpdates } = await import('../../src/db/schema');
+  const { interview, turn, source } = await interviewFixture([], 'Synthetic purgeable update');
+  const generation = await publishInterviewGeneration(owner, interview.id, { generationKey: randomUUID(), sourceRevision: interview.revision, assistant: 'Synthetic source question', proposals: [{ payload: { kind: 'personal_update', title: 'Synthetic update title', body: 'Synthetic update body' }, sources: [source] }] });
+  const accepted = await reviewMemoryProposal(owner, interview.id, generation.proposals[0].id, { action: 'accept', revision: 1 });
+  const updateId = accepted.acceptedRef!.id;
+  const before = await getInterview(owner, interview.id);
+  await assert.rejects(() => changePersonalUpdate(owner, updateId, { requestKey: randomUUID(), revision: 1, action: 'edit', title: 'Should roll back', body: 'Should roll back', allowedPersonIds: [randomUUID()] }), notFound);
+  assert.equal((await getInterview(owner, interview.id)).interview.revision, before.interview.revision);
+  assert.equal((await db.select().from(personalUpdates).where(eq(personalUpdates.id, updateId)))[0].revision, 1);
+  const edit = { requestKey: randomUUID(), revision: 1, action: 'edit' as const, title: 'Updated title', body: 'Updated body' };
+  await changePersonalUpdate(owner, updateId, edit);
+  const preview = await previewInterviewCorrection(owner, interview.id, turn.id);
+  await correctInterviewTurn(owner, interview.id, turn.id, { requestKey: randomUUID(), impactKey: preview.impactKey, action: 'remove', retainConfirmedChoices: true });
+  await assert.rejects(() => changePersonalUpdate(owner, updateId, edit), conflict);
+  // Independent manually saved updates remain private and do not recreate an interview-derived row.
+  const independent = await createPersonalUpdate(owner, { requestKey: randomUUID(), title: 'Independent fixture', body: 'Independent fixture body' });
+  assert.equal(independent.proposalId, null);
+});
+
+test('the personal-update library paginates without dropping owner records or exposing other owners', async () => {
+  const { personalUpdates } = await import('../../src/db/schema');
+  const { listPersonalUpdates } = await import('../../src/lib/network/personal-updates');
+  const fixtureOwner = `update-pages-${randomUUID()}`;
+  await db.insert(user).values({ id: fixtureOwner, name: 'Update pages fixture', email: `${fixtureOwner}@example.test` });
+  try {
+    const inserted = await db.insert(personalUpdates).values(Array.from({ length: 23 }, (_, index) => ({ userId: fixtureOwner, title: `Synthetic page item ${index}`, body: 'Synthetic page fixture' }))).returning({ id: personalUpdates.id });
+    const first = await listPersonalUpdates(fixtureOwner, 1), second = await listPersonalUpdates(fixtureOwner, 2);
+    assert.equal(first.updates.length, 20); assert.equal(first.hasMore, true); assert.equal(second.updates.length, 3); assert.equal(second.hasMore, false);
+    assert.deepEqual([...first.updates, ...second.updates].map(row => row.id).sort(), inserted.map(row => row.id).sort());
+    assert.equal(first.people.length, 0); assert.equal(first.circles.length, 0);
+    await assert.rejects(() => listPersonalUpdates(fixtureOwner, -1));
+  } finally { await db.delete(user).where(eq(user.id, fixtureOwner)); }
+});

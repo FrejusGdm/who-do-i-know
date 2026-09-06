@@ -1102,6 +1102,7 @@ export const personalUpdates = pgTable('personal_updates', {
   happenedOn: date('happened_on'),
   allowedPersonIds: jsonb('allowed_person_ids').$type<string[]>().notNull().default([]),
   allowedCircleIds: jsonb('allowed_circle_ids').$type<string[]>().notNull().default([]),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
   revision: integer('revision').notNull().default(1),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -1150,3 +1151,13 @@ export const conversationPreferenceRequests = pgTable('conversation_preference_r
   uniqueIndex('conversation_preference_requests_owner_key_uidx').on(t.userId, t.requestKey),
   foreignKey({ columns: [t.personId, t.userId], foreignColumns: [people.id, people.userId] }).onDelete('cascade'),
 ]);
+
+
+export const personalUpdateRequests = pgTable('personal_update_requests', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  updateId: uuid('update_id').notNull(),
+  requestKey: uuid('request_key').notNull(),
+  requestHash: text('request_hash').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex('personal_update_requests_owner_key_uidx').on(t.userId, t.requestKey)]);

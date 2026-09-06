@@ -24,6 +24,7 @@ import {
   networkAiUsage,
   networkSettings,
   openLoops,
+  personalUpdates,
   people,
   user,
 } from "@/db/schema";
@@ -574,6 +575,20 @@ export async function interviewJobContext(job: Job): Promise<InterviewContext> {
             ),
           )
       : [];
+    const updateMemory = reviewed.length
+      ? await tx
+          .select()
+          .from(personalUpdates)
+          .where(
+            and(
+              eq(personalUpdates.userId, job.userId),
+              inArray(
+                personalUpdates.proposalId,
+                reviewed.map((row) => row.id),
+              ),
+            ),
+          )
+      : [];
     const context: InterviewContext = {
       mode: interview.mode,
       today: todayInTimezone(settings.timezone),
@@ -585,6 +600,9 @@ export async function interviewJobContext(job: Job): Promise<InterviewContext> {
       existingPlans: plans,
       reviewed: reviewed.map((row) => {
         const loop = loopMemory.find((loop) => loop.proposalId === row.id);
+        const update = updateMemory.find(
+          (update) => update.proposalId === row.id,
+        );
         return {
           kind: row.payload.kind,
           status: row.status,
@@ -599,7 +617,18 @@ export async function interviewJobContext(job: Job): Promise<InterviewContext> {
                       }
                     : { status: "removed" },
                 )
-              : JSON.stringify(row.payload).slice(0, 300),
+              : row.payload.kind === "personal_update" &&
+                  row.status === "accepted"
+                ? JSON.stringify(
+                    update && !update.deletedAt
+                      ? {
+                          title: update.title,
+                          body: update.body.slice(0, 300),
+                          happenedOn: update.happenedOn,
+                        }
+                      : { status: "removed" },
+                  )
+                : JSON.stringify(row.payload).slice(0, 300),
         };
       }),
     };

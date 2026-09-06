@@ -1,16 +1,14 @@
 import { createHash } from "node:crypto";
-import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import {
-  circles,
   confirmedFacts,
   interviewPeople,
   interviews,
   interviewTurns,
   memoryProposals,
   notes,
-  personalUpdates,
   interactions,
   people,
 } from "@/db/schema";
@@ -38,6 +36,7 @@ import {
   validateSourceQuotes,
 } from "./interview-grounding";
 
+import { createPersonalUpdate } from "./personal-updates";
 import { createOpenLoop } from "./open-loops";
 import { lockMemoryOwner } from "./legacy-ai-jobs";
 
@@ -642,31 +641,18 @@ async function materialize(
       break;
     }
     case "personal_update": {
-      if (payload.allowedCircleIds.length) {
-        const matches = await tx
-          .select({ id: circles.id })
-          .from(circles)
-          .where(
-            and(
-              eq(circles.userId, userId),
-              inArray(circles.id, payload.allowedCircleIds),
-            ),
-          );
-        if (matches.length !== new Set(payload.allowedCircleIds).size)
-          throw new NetworkError(404, "Circle not found");
-      }
-      const [update] = await tx
-        .insert(personalUpdates)
-        .values({
+      const update = await createPersonalUpdate(
+        userId,
+        {
           title: payload.title,
           body: payload.body,
           happenedOn: payload.happenedOn,
           allowedPersonIds: payload.allowedPersonIds,
           allowedCircleIds: payload.allowedCircleIds,
-          userId,
-          proposalId: proposal.id,
-        })
-        .returning();
+          requestKey: proposal.id,
+        },
+        { tx, proposalId: proposal.id },
+      );
       ref = { type: "personal_update", id: update.id };
       break;
     }

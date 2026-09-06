@@ -3,7 +3,6 @@ import { and, asc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import {
-  aiProcessingTasks,
   interactionParticipants,
   interactions,
   interviewPeople,
@@ -13,6 +12,7 @@ import {
   openLoops,
   people,
 } from "@/db/schema";
+import { invalidateInterviewContexts } from "./interview-invalidation";
 import { calendarDate } from "./input";
 import { lockMemoryOwner } from "./legacy-ai-jobs";
 import { lockPeople, NetworkError, type NetworkTx } from "./store";
@@ -85,33 +85,6 @@ async function lockContext(
       .for("update");
   await lockPeople(tx, owner, [personId]);
   return ids;
-}
-export async function invalidateCommitmentContext(
-  tx: NetworkTx,
-  owner: string,
-  ids: string[],
-) {
-  if (!ids.length) return;
-  await tx
-    .update(interviews)
-    .set({ revision: sql`${interviews.revision} + 1`, updatedAt: new Date() })
-    .where(and(eq(interviews.userId, owner), inArray(interviews.id, ids)));
-  await tx
-    .update(aiProcessingTasks)
-    .set({
-      status: "canceled",
-      errorCategory: "source_changed",
-      errorMessage: null,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(aiProcessingTasks.userId, owner),
-        eq(aiProcessingTasks.targetType, "interview"),
-        inArray(aiProcessingTasks.targetId, ids),
-        inArray(aiProcessingTasks.status, ["queued", "processing"]),
-      ),
-    );
 }
 async function validateInteraction(
   tx: NetworkTx,
@@ -229,7 +202,7 @@ export async function createOpenLoop(
       requestKey: input.requestKey,
       requestHash: hash,
     });
-    await invalidateCommitmentContext(tx, owner, contextIds);
+    await invalidateInterviewContexts(tx, owner, contextIds);
     return created;
   };
   return options ? save(options.tx) : db.transaction(save);
@@ -299,7 +272,7 @@ export async function updateOpenLoop(
       requestKey: input.requestKey,
       requestHash: hash,
     });
-    await invalidateCommitmentContext(tx, owner, contextIds);
+    await invalidateInterviewContexts(tx, owner, contextIds);
     return saved;
   });
 }

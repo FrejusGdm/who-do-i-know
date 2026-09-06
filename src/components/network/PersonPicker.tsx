@@ -14,11 +14,13 @@ export function PersonPicker({
   onChange,
   initial = [],
   multiple = false,
+  label,
 }: {
   selected: string[];
   onChange: (ids: string[]) => void;
   initial?: PersonOption[];
   multiple?: boolean;
+  label?: string;
 }) {
   const id = useId();
   const [query, setQuery] = useState("");
@@ -59,7 +61,7 @@ export function PersonPicker({
   return (
     <fieldset className="space-y-3">
       <legend className="mb-2 text-sm font-medium">
-        {multiple ? "People in this memory" : "Who is this about?"}
+        {label ?? (multiple ? "People in this memory" : "Who is this about?")}
       </legend>
       <div className="flex gap-2">
         <label htmlFor={`${id}-search`} className="sr-only">

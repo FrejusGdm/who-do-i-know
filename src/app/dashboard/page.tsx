@@ -143,6 +143,9 @@ export default async function DashboardPage() {
           )}
         </section>
         <aside className="space-y-6">
+          <Link href="/updates" className={secondaryButtonClass}>
+            Your personal updates
+          </Link>
           {!!needsReview.length && (
             <section className="rounded-lg border border-[#deded5] bg-white p-6">
               <h2 className="text-lg font-medium">

@@ -23,7 +23,7 @@ import {
 } from "@/db/schema";
 import { lockInterview } from "./interviews";
 import { lockMemoryOwner } from "./legacy-ai-jobs";
-import { invalidateCommitmentContext } from "./open-loops";
+import { invalidateInterviewContexts } from "./interview-invalidation";
 import { proposalPeople } from "./interview-grounding";
 import { NetworkError, type NetworkTx } from "./store";
 
@@ -452,7 +452,7 @@ export async function correctInterviewTurn(
               ),
             )
         : [];
-      await invalidateCommitmentContext(
+      await invalidateInterviewContexts(
         tx,
         owner,
         [...new Set([...linked, ...sourceInterviews].map((row) => row.id))]

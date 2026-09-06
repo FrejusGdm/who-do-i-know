@@ -85,6 +85,13 @@
       "when": 1788662511444,
       "tag": "0011_conversation_preferences",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1788663024670,
+      "tag": "0012_personal_update_controls",
+      "breakpoints": true
     }
   ]
 }
