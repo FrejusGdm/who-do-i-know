@@ -215,3 +215,8 @@ Next: finish checks; review/stage only deployment and dependency files; commit/p
 
 
 Cloud build 1055d29 failed during TypeScript checking with V8 heap exhaustion around 1.9 GiB; compilation itself succeeded and the failed image was not pushed. Increase only the temporary CodeBuild machine to MEDIUM and build-stage Node heap to 4096 MiB. Runtime Fargate sizing is unchanged; checks remain enabled. Rebuild a new committed release rather than retrying the unchanged configuration.
+
+
+### Container scan follow-up
+
+The corrected build `6b3d61c7-47b9-4209-97b8-c37c40b52169` succeeded for `0e15861` from source version `Sd.HGJPvvjGSWJVmjgtffsANJ_C9BLrb`. ECR digest `sha256:f0363f8e307ad11e781a42e454316149d0c284a809bc433604338a6523605ad3` scanned with 3 critical/12 high/5 medium operating-system findings (Perl, util-linux, PCRE2, zlib). No running service uses this image. Refresh installed Debian security packages in a shared base stage and rebuild/rescan before release. This cleanup occurs inside the container image, not on the owner’s filesystem. CloudFront allocated `https://d3p6ii3tjocl55.cloudfront.net`; private origin is deployed and final stack creation is completing. URL not yet app-verified.

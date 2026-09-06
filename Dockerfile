@@ -1,5 +1,9 @@
 # Build the release from a Git archive of the reviewed commit, never the owner's working tree.
-FROM node:22-bookworm-slim AS dependencies
+FROM node:22-bookworm-slim AS base
+# Refresh security fixes released since the upstream image was built.
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+
+FROM base AS dependencies
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY package.json package-lock.json ./
@@ -10,7 +14,7 @@ COPY . .
 # Type checking needs more heap than the default container limit; runtime stays unchanged.
 RUN NODE_OPTIONS=--max-old-space-size=4096 npm run build
 
-FROM node:22-bookworm-slim AS runtime
+FROM base AS runtime
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
 COPY package.json package-lock.json ./
