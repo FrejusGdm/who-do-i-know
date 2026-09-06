@@ -71,6 +71,13 @@
       "when": 1788658618726,
       "tag": "0009_interview_corrections",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788660260163,
+      "tag": "0010_open_loop_controls",
+      "breakpoints": true
     }
   ]
 }

@@ -66,3 +66,13 @@ A correction replaces the source text; removal empties it and retains a content-
 The operation is atomic with cancellation and its retry receipt. Matching retries return the current interview without restoring old content. The shared owner lock serializes against legacy/interview publication; in-flight lease tokens remain until the old caller exits or its lease expires. Interview reads use a coherent database snapshot and omit deleted turns.
 
 This is entry-level correction/removal, not person or workspace deletion. Other user entries, unfinished drafts, imported records, confirmed identity/profile fields, met status, memberships and selected plan settings remain; the dialog discloses this scope and requires acknowledgment. Existing copies exported by the owner or retained in backups are not erased by this operation. Full export, person/workspace deletion and backup-retention operations remain M5/M6 work.
+
+## Dated commitments
+
+A commitment belongs to one person and can optionally link to an interaction in which that person participated. Add, edit, complete, dismiss or reopen it from Person; Today also offers complete/dismiss actions. Archived people retain history but reject new changes. Completing a commitment never records contact or advances a plan.
+
+Today includes open commitments due on or before seven calendar days from today in the owner's timezone, including overdue ones. Commitments precede routine check-ins and group by person while keeping each deadline visible. Pausing or snoozing a routine plan does not suppress a promise. Undated, completed and dismissed commitments remain on Person.
+
+Migration `0010_open_loop_controls.sql` adds the optional interaction link and hash-only retry receipts. Apply through the normal reviewed migration process; build/start never migrates automatically. A retry reads the current commitment and cannot restore an older status. Source removal deletes linked promises before deleting an interaction; receipts survive to prevent replay from recreating them.
+
+Commitment changes invalidate unfinished work for related interviews. The original interview's reviewed-memory summary uses the commitment's current text, date and status. Broader commitment retrieval into other interviews or outreach drafts is deferred until generated outputs carry source dependencies that correction/removal can purge. Private commitment bodies are not added to other interviews' context in this slice.

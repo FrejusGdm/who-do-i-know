@@ -409,13 +409,7 @@ export function InterviewWorkspace({
               circles={circles}
               onShowSource={() => setView("conversation")}
               disabled={interview.status === "discarded"}
-              onReviewed={(updated) =>
-                setProposals((current) =>
-                  current.map((item) =>
-                    item.id === updated.id ? updated : item,
-                  ),
-                )
-              }
+              onReviewed={(_updated, snapshot) => receiveSnapshot(snapshot)}
             />
           ))}
         </section>

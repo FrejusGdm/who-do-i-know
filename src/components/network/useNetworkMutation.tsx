@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 /** Keep failed input in the form; never put private bodies into persistent browser storage. */
 export function useNetworkMutation() {
   const running = useRef(false);
+  const rejected = useRef(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   async function save<T>(
@@ -13,6 +14,7 @@ export function useNetworkMutation() {
   ): Promise<T | undefined> {
     if (running.current) return;
     running.current = true;
+    rejected.current = false;
     setPending(true);
     setError(null);
     try {
@@ -25,6 +27,7 @@ export function useNetworkMutation() {
       });
       const result = await response.json().catch(() => null);
       if (!response.ok) {
+        rejected.current = response.status >= 400 && response.status < 500;
         const message =
           response.status === 401 || response.status === 403
             ? "Your session needs attention. Sign in again, then retry."
@@ -52,7 +55,7 @@ export function useNetworkMutation() {
       setPending(false);
     }
   }
-  return { save, pending, error };
+  return { save, pending, error, rejected };
 }
 
 export function SaveFeedback({

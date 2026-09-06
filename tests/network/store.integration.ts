@@ -802,3 +802,135 @@ test('a failed correction rolls back source removal, memories, summaries and con
   assert.equal(plan.needsReview, false); assert.equal(plan.status, 'active');
   assert.equal((await previewInterviewCorrection(owner, interview.id, turn.id)).impactKey, preview.impactKey);
 });
+
+test('commitments are owner-scoped, revisioned and retry-safe without inventing contact', async () => {
+  const { createOpenLoop, updateOpenLoop, personOpenLoops, openLoopReminders } = await import('../../src/lib/network/open-loops');
+  const person = await createPerson(owner, { name: 'Commitment fixture' });
+  const foreign = await createPerson(stranger, { name: 'Foreign commitment fixture' });
+  const plan = await savePlan(owner, person.id, { nextDueOn: '2026-09-06' });
+  const input = { requestKey: randomUUID(), body: 'Send synthetic reading list', dueOn: '2026-09-10' };
+  const [first, replay] = await Promise.all([createOpenLoop(owner, person.id, input), createOpenLoop(owner, person.id, input)]);
+  assert.equal(first.id, replay.id); assert.equal((await personOpenLoops(owner, person.id)).length, 1);
+  await assert.rejects(() => createOpenLoop(owner, foreign.id, input), conflict);
+  await assert.rejects(() => createOpenLoop(owner, foreign.id, { ...input, requestKey: randomUUID() }), notFound);
+  await assert.rejects(() => personOpenLoops(stranger, person.id), notFound);
+  await assert.rejects(() => updateOpenLoop(stranger, person.id, first.id, { requestKey: randomUUID(), revision: 1, action: 'status', status: 'done' }), notFound);
+  const doneRequest = { requestKey: randomUUID(), revision: 1, action: 'status' as const, status: 'done' as const };
+  const done = await updateOpenLoop(owner, person.id, first.id, doneRequest);
+  assert.equal((await openLoopReminders(owner)).some(row => row.loop.id === first.id), false);
+  const reopened = await updateOpenLoop(owner, person.id, first.id, { requestKey: randomUUID(), revision: done.revision, action: 'status', status: 'open' });
+  assert.equal((await updateOpenLoop(owner, person.id, first.id, doneRequest)).status, 'open');
+  assert.equal((await createOpenLoop(owner, person.id, input)).revision, reopened.revision);
+  await assert.rejects(() => updateOpenLoop(owner, person.id, first.id, { ...doneRequest, requestKey: randomUUID() }), conflict);
+  const edited = await updateOpenLoop(owner, person.id, first.id, { requestKey: randomUUID(), revision: reopened.revision, action: 'edit', body: 'Revised synthetic list', dueOn: null });
+  assert.equal(edited.dueOn, null);
+  const [unchanged] = await db.select().from(keepInTouchPlans).where(eq(keepInTouchPlans.id, plan.id));
+  assert.deepEqual(unchanged, plan);
+  assert.equal((await db.select().from(checkIns).where(eq(checkIns.planId, plan.id))).length, 0);
+  await db.update(people).set({ archivedAt: new Date() }).where(eq(people.id, person.id));
+  await assert.rejects(() => updateOpenLoop(owner, person.id, first.id, { requestKey: randomUUID(), revision: edited.revision, action: 'status', status: 'dismissed' }), notFound);
+  assert.equal((await personOpenLoops(owner, person.id)).length, 1);
+  assert.equal((await openLoopReminders(owner)).some(row => row.person.id === foreign.id || row.person.id === person.id), false);
+});
+
+test('commitments only link owned participating interactions and reminders report real last contact', async () => {
+  const { createOpenLoop, openLoopReminders } = await import('../../src/lib/network/open-loops');
+  const person = await createPerson(owner, { name: 'Linked commitment fixture' });
+  const other = await createPerson(owner, { name: 'Unrelated person fixture' });
+  const foreign = await createPerson(stranger, { name: 'Private contact fixture' });
+  const event = await recordInteraction(owner, { requestKey: randomUUID(), personIds: [person.id], body: 'Synthetic call', channel: 'call', datePrecision: 'day', occurredOn: '2026-06-10', qualifiesForCadence: true });
+  const foreignEvent = await recordInteraction(stranger, { requestKey: randomUUID(), personIds: [foreign.id], body: 'Foreign call', channel: 'call' });
+  const input = { requestKey: randomUUID(), body: 'Synthetic linked promise', dueOn: '2026-09-06', interactionId: event.id };
+  const loop = await createOpenLoop(owner, person.id, input);
+  await assert.rejects(() => createOpenLoop(owner, other.id, { ...input, requestKey: randomUUID() }), notFound);
+  await assert.rejects(() => createOpenLoop(owner, person.id, { ...input, requestKey: randomUUID(), interactionId: foreignEvent.id }), notFound);
+  const reminder = (await openLoopReminders(owner)).find(row => row.loop.id === loop.id)!;
+  assert.equal(reminder.lastContactOn, '2026-06-10');
+  const unknown = await createOpenLoop(owner, other.id, { requestKey: randomUUID(), body: 'No contact history', dueOn: '2026-09-06' });
+  assert.equal((await openLoopReminders(owner)).find(row => row.loop.id === unknown.id)!.lastContactOn, null);
+});
+
+test('commitment edits invalidate interview work; reviewed status stays current and source removal prevents resurrection', async () => {
+  const { createOpenLoop, updateOpenLoop, personOpenLoops } = await import('../../src/lib/network/open-loops');
+  const { publishInterviewGeneration, reviewMemoryProposal, getInterview } = await import('../../src/lib/network/interviews');
+  const { previewInterviewCorrection, correctInterviewTurn } = await import('../../src/lib/network/interview-corrections');
+  const { queueInterview, claimInterviewJob, interviewJobContext, finishInterviewJob } = await import('../../src/lib/network/interview-jobs');
+  const { aiProcessingTasks, networkAiUsage } = await import('../../src/db/schema');
+  await db.delete(aiProcessingTasks).where(eq(aiProcessingTasks.userId, owner));
+  await db.delete(networkAiUsage).where(eq(networkAiUsage.userId, owner));
+  process.env.PRIVATE_USER_EMAILS = `${owner}@example.test`; await enableInterviewAI();
+  const person = await createPerson(owner, { name: 'Cross interview commitment fixture' });
+  const original = await interviewFixture([person.id], 'Synthetic source call and promise');
+  const generated = await publishInterviewGeneration(owner, original.interview.id, { generationKey: randomUUID(), sourceRevision: original.interview.revision, assistant: 'Synthetic question', proposals: [
+    { payload: { kind: 'interaction', values: { requestKey: randomUUID(), personIds: [person.id], body: 'Synthetic call', channel: 'call', datePrecision: 'day', occurredOn: '2026-06-01' } }, sources: [original.source] },
+    { payload: { kind: 'open_loop', personId: person.id, body: 'Old synthetic promise', dueOn: '2026-09-06' }, sources: [original.source] }
+  ] });
+  for (const proposal of generated.proposals) await reviewMemoryProposal(owner, original.interview.id, proposal.id, { action: 'accept', revision: 1 });
+  const [event] = await db.select().from(interactions).where(eq(interactions.requestKey, generated.proposals[0].id));
+  const input = { requestKey: randomUUID(), body: 'Manually linked promise', dueOn: '2026-09-07', interactionId: event.id };
+  await createOpenLoop(owner, person.id, input);
+  const reviewed = (await personOpenLoops(owner, person.id)).find(row => row.sourceInterviewId)!;
+  const second = await interviewFixture([person.id], 'Synthetic follow-up interview');
+  await queueInterview(owner, second.interview.id, { requestKey: randomUUID(), revision: second.interview.revision });
+  const stale = await claimInterviewJob(owner); assert.ok(stale);
+  const before = await interviewJobContext(stale); assert.equal(JSON.stringify(before).includes('Manually linked promise'), false);
+  const edited = await updateOpenLoop(owner, person.id, reviewed.id, { requestKey: randomUUID(), revision: reviewed.revision, action: 'edit', body: 'Current synthetic promise', dueOn: null });
+  assert.equal(await finishInterviewJob(stale, await fixtureReply()), false);
+  await updateOpenLoop(owner, person.id, reviewed.id, { requestKey: randomUUID(), revision: edited.revision, action: 'status', status: 'done' });
+  const current = await getInterview(owner, original.interview.id);
+  await queueInterview(owner, original.interview.id, { requestKey: randomUUID(), revision: current.interview.revision });
+  const own = await claimInterviewJob(owner); assert.ok(own);
+  const context = await interviewJobContext(own);
+  assert.ok(context?.reviewed.some(row => row.summary.includes('Current synthetic promise') && row.summary.includes('done')));
+  await finishInterviewJob(own, await fixtureReply());
+  const refreshed = await getInterview(owner, second.interview.id);
+  await queueInterview(owner, second.interview.id, { requestKey: randomUUID(), revision: refreshed.interview.revision });
+  const removed = await claimInterviewJob(owner); assert.ok(removed);
+  assert.ok(await interviewJobContext(removed));
+  const preview = await previewInterviewCorrection(owner, original.interview.id, original.turn.id);
+  await correctInterviewTurn(owner, original.interview.id, original.turn.id, { requestKey: randomUUID(), impactKey: preview.impactKey, action: 'remove', retainConfirmedChoices: true });
+  assert.equal(await finishInterviewJob(removed, await fixtureReply()), false);
+  assert.equal((await personOpenLoops(owner, person.id)).length, 0);
+  await assert.rejects(() => createOpenLoop(owner, person.id, input), conflict);
+});
+
+test('commitment receipt failures roll back memory and interview revisions together', async () => {
+  const { sql } = await import('drizzle-orm');
+  const { createOpenLoop, personOpenLoops } = await import('../../src/lib/network/open-loops');
+  const { getInterview } = await import('../../src/lib/network/interviews');
+  const person = await createPerson(owner, { name: 'Atomic commitment fixture' });
+  const { interview } = await interviewFixture([person.id]);
+  const requestKey = randomUUID();
+  await db.execute(sql.raw(`ALTER TABLE open_loop_requests ADD CONSTRAINT test_loop_rollback CHECK (request_key <> '${requestKey}'::uuid)`));
+  try {
+    await assert.rejects(() => createOpenLoop(owner, person.id, { requestKey, body: 'Synthetic rolled-back promise', dueOn: '2026-09-06' }));
+  } finally {
+    await db.execute(sql`ALTER TABLE open_loop_requests DROP CONSTRAINT test_loop_rollback`);
+  }
+  assert.equal((await personOpenLoops(owner, person.id)).length, 0);
+  assert.equal((await getInterview(owner, interview.id)).interview.revision, interview.revision);
+  assert.ok(await createOpenLoop(owner, person.id, { requestKey, body: 'Synthetic successful retry', dueOn: '2026-09-06' }));
+});
+
+test('removing a linked interaction invalidates the promise origin even without interview participants', async () => {
+  const { updateOpenLoop, personOpenLoops } = await import('../../src/lib/network/open-loops');
+  const { publishInterviewGeneration, reviewMemoryProposal, getInterview } = await import('../../src/lib/network/interviews');
+  const { previewInterviewCorrection, correctInterviewTurn } = await import('../../src/lib/network/interview-corrections');
+  const person = await createPerson(owner, { name: 'Independent promise source fixture' });
+  const first = await interviewFixture([person.id], 'Synthetic interaction source');
+  const contact = await publishInterviewGeneration(owner, first.interview.id, { generationKey: randomUUID(), sourceRevision: first.interview.revision, assistant: 'Synthetic contact question', proposals: [{ payload: { kind: 'interaction', values: { requestKey: randomUUID(), personIds: [person.id], body: 'Synthetic linked call', channel: 'call' } }, sources: [first.source] }] });
+  await reviewMemoryProposal(owner, first.interview.id, contact.proposals[0].id, { action: 'accept', revision: 1 });
+  const [event] = await db.select().from(interactions).where(eq(interactions.requestKey, contact.proposals[0].id));
+  const second = await interviewFixture([], 'Synthetic independent promise source');
+  const generated = await publishInterviewGeneration(owner, second.interview.id, { generationKey: randomUUID(), sourceRevision: second.interview.revision, assistant: 'Synthetic promise question', proposals: [{ payload: { kind: 'open_loop', personId: person.id, body: 'Independent synthetic promise', dueOn: null }, sources: [second.source] }] });
+  await reviewMemoryProposal(owner, second.interview.id, generated.proposals[0].id, { action: 'accept', revision: 1, identityConfirmed: true });
+  const [loop] = await personOpenLoops(owner, person.id);
+  await updateOpenLoop(owner, person.id, loop.id, { requestKey: randomUUID(), revision: loop.revision, action: 'edit', body: loop.body, interactionId: event.id });
+  const before = await getInterview(owner, second.interview.id);
+  const preview = await previewInterviewCorrection(owner, first.interview.id, first.turn.id);
+  await correctInterviewTurn(owner, first.interview.id, first.turn.id, { requestKey: randomUUID(), impactKey: preview.impactKey, action: 'remove', retainConfirmedChoices: true });
+  assert.equal((await getInterview(owner, second.interview.id)).interview.revision, before.interview.revision + 1);
+  assert.equal((await personOpenLoops(owner, person.id)).length, 0);
+  // Other explicitly submitted recollections remain in their own interview.
+  assert.equal((await getInterview(owner, second.interview.id)).turns[0].content, second.turn.content);
+});

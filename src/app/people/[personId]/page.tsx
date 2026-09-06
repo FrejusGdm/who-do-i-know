@@ -13,6 +13,8 @@ import { ContactPlan } from "@/components/network/ContactPlan";
 import { LogContact } from "@/components/network/LogContact";
 import { ImportedContext } from "@/components/network/ImportedContext";
 import { NoteComposer } from "@/components/people/NoteComposer";
+import { OpenLoops } from "@/components/network/OpenLoops";
+import { personOpenLoops } from "@/lib/network/open-loops";
 export const dynamic = "force-dynamic";
 export default async function PersonPage({
   params,
@@ -25,7 +27,10 @@ export default async function PersonPage({
     if (error instanceof NetworkError && error.status === 404) notFound();
     throw error;
   });
-  const settings = await ownerSettings(session.user.id);
+  const [settings, loops] = await Promise.all([
+    ownerSettings(session.user.id),
+    personOpenLoops(session.user.id, personId),
+  ]);
   const today = todayInTimezone(settings.timezone);
   const { person, plan, interactions, notes, circles, facts } = data;
   const archived =
@@ -139,6 +144,7 @@ export default async function PersonPage({
               {interactions.map((event) => (
                 <article
                   key={event.id}
+                  id={`interaction-${event.id}`}
                   className="rounded-lg border border-[#deded5] bg-white p-5"
                 >
                   <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm text-[#62685e]">
@@ -234,6 +240,12 @@ export default async function PersonPage({
           <ImportedContext userId={session.user.id} personId={personId} />
         </div>
         <aside className="space-y-6">
+          <OpenLoops
+            personId={personId}
+            loops={loops}
+            events={interactions}
+            archived={archived}
+          />
           {!archived && (
             <>
               <ContactPlan

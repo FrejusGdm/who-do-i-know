@@ -1,4 +1,5 @@
 "use client";
+import type { InterviewSnapshot } from "./InterviewWorkspace";
 import { useState, type ReactNode } from "react";
 import type { memoryProposals } from "@/db/schema";
 import type { ProposalPayload } from "@/lib/network/interview-input";
@@ -82,7 +83,7 @@ export function ProposalReview({
   proposal: ProposalView;
   people: PersonOption[];
   circles: CircleOption[];
-  onReviewed: (proposal: ProposalView) => void;
+  onReviewed: (proposal: ProposalView, snapshot: InterviewSnapshot) => void;
   onShowSource: () => void;
   disabled?: boolean;
 }) {
@@ -107,7 +108,10 @@ export function ProposalReview({
     );
   }
   async function review(action: "accept" | "reject") {
-    const result = await mutation.save<{ proposal: ProposalView }>(
+    const result = await mutation.save<{
+      proposal: ProposalView;
+      snapshot: InterviewSnapshot;
+    }>(
       `/api/interviews/${proposal.interviewId}/proposals/${proposal.id}`,
       "PATCH",
       {
@@ -118,7 +122,7 @@ export function ProposalReview({
           : {}),
       },
     );
-    if (result) onReviewed(result.proposal);
+    if (result) onReviewed(result.proposal, result.snapshot);
   }
   return (
     <article

@@ -1,5 +1,5 @@
 import { networkResponse } from "@/lib/network/api";
-import { reviewMemoryProposal } from "@/lib/network/interviews";
+import { getInterview, reviewMemoryProposal } from "@/lib/network/interviews";
 import { reviewProposalInput } from "@/lib/network/interview-input";
 import { readJsonLimited } from "@/lib/request-security";
 export const dynamic = "force-dynamic";
@@ -9,13 +9,12 @@ export async function PATCH(
 ) {
   return networkResponse(request, async (owner) => {
     const { interviewId, proposalId } = await params;
-    return {
-      proposal: await reviewMemoryProposal(
-        owner,
-        interviewId,
-        proposalId,
-        reviewProposalInput.parse(await readJsonLimited(request)),
-      ),
-    };
+    const proposal = await reviewMemoryProposal(
+      owner,
+      interviewId,
+      proposalId,
+      reviewProposalInput.parse(await readJsonLimited(request)),
+    );
+    return { proposal, snapshot: await getInterview(owner, interviewId) };
   });
 }

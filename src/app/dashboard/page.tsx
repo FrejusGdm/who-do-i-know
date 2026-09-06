@@ -6,7 +6,9 @@ import {
   networkPlannedPeople,
   ownerSettings,
 } from "@/lib/network/queries";
-import { duePeople } from "@/lib/network/today";
+import { todayPeople } from "@/lib/network/today";
+import { openLoopReminders } from "@/lib/network/open-loops";
+import { CommitmentCard } from "@/components/network/OpenLoops";
 import {
   NetworkShell,
   PageHeading,
@@ -16,12 +18,13 @@ import {
 export const dynamic = "force-dynamic";
 export default async function DashboardPage() {
   const session = await requirePrivatePageSession();
-  const [planned, settings, circles] = await Promise.all([
+  const [planned, settings, circles, reminders] = await Promise.all([
     networkPlannedPeople(session.user.id),
     ownerSettings(session.user.id),
     networkCircles(session.user.id),
+    openLoopReminders(session.user.id),
   ]);
-  const due = duePeople(planned);
+  const due = todayPeople(planned, reminders, settings.timezone);
   const needsReview = planned.filter((person) => person.plan.needsReview);
   const greeting = session.user.name.split(" ")[0];
   const date = new Intl.DateTimeFormat("en", {
@@ -53,6 +56,10 @@ export default async function DashboardPage() {
               {due.length} {due.length === 1 ? "person" : "people"}
             </span>
           </div>
+          <p className="mb-4 text-sm leading-6 text-[#62685e]">
+            Promises due within the next seven days come first, followed by your
+            routine check-ins.
+          </p>
           <ul className="divide-y divide-[#deded5] overflow-hidden rounded-lg border border-[#deded5] bg-white">
             {due.map((person) => (
               <li key={person.id} className="p-5 sm:p-6">
@@ -73,14 +80,28 @@ export default async function DashboardPage() {
                         .join(" · ") || person.relationshipType}
                     </p>
                   </div>
-                  <span className="rounded-full bg-[#e5eadd] px-3 py-1 text-sm text-[#344e3d]">
-                    {person.plan.preferredChannel.replace("_", " ")}
-                  </span>
+                  {person.plan && (
+                    <span className="rounded-full bg-[#e5eadd] px-3 py-1 text-sm text-[#344e3d]">
+                      {person.plan.preferredChannel.replace("_", " ")}
+                    </span>
+                  )}
                 </div>
-                <p className="mt-4 text-sm text-[#43664F]">{person.reason}</p>
+                {!!person.commitments.length && (
+                  <div className="mt-4 space-y-3">
+                    {person.commitments.map((loop) => (
+                      <CommitmentCard
+                        key={`${loop.id}-${loop.revision}`}
+                        loop={loop}
+                        compact
+                      />
+                    ))}
+                  </div>
+                )}
+                {person.reason && (
+                  <p className="mt-4 text-sm text-[#43664F]">{person.reason}</p>
+                )}
                 <p className="mt-2 text-sm text-[#62685e]">
-                  Last qualifying contact:{" "}
-                  {person.plan.lastContactOn ?? "unknown"}
+                  Last qualifying contact: {person.lastContactOn ?? "unknown"}
                 </p>
                 <div className="mt-5 flex flex-wrap gap-3">
                   <Link

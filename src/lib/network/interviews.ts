@@ -10,7 +10,6 @@ import {
   interviewTurns,
   memoryProposals,
   notes,
-  openLoops,
   personalUpdates,
   interactions,
   people,
@@ -38,6 +37,9 @@ import {
   proposalPeople,
   validateSourceQuotes,
 } from "./interview-grounding";
+
+import { createOpenLoop } from "./open-loops";
+import { lockMemoryOwner } from "./legacy-ai-jobs";
 
 const fingerprint = (value: unknown) =>
   createHash("sha256").update(JSON.stringify(value)).digest("hex");
@@ -630,16 +632,12 @@ async function materialize(
       break;
     }
     case "open_loop": {
-      const [loop] = await tx
-        .insert(openLoops)
-        .values({
-          userId,
-          personId: requiredPerson(payload.personId),
-          proposalId: proposal.id,
-          body: payload.body,
-          dueOn: payload.dueOn,
-        })
-        .returning();
+      const loop = await createOpenLoop(
+        userId,
+        requiredPerson(payload.personId),
+        { requestKey: proposal.id, body: payload.body, dueOn: payload.dueOn },
+        { tx, proposalId: proposal.id },
+      );
       ref = { type: "open_loop", id: loop.id };
       break;
     }
@@ -697,6 +695,7 @@ export async function reviewMemoryProposal(
   const input = reviewProposalInput.parse(raw);
   const hash = fingerprint(input);
   return db.transaction(async (tx) => {
+    await lockMemoryOwner(tx, userId);
     const interview = await lockInterview(tx, userId, interviewId);
     if (interview.status === "discarded")
       throw new NetworkError(409, "This interview was discarded");

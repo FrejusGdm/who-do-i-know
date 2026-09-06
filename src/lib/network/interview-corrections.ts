@@ -23,6 +23,7 @@ import {
 } from "@/db/schema";
 import { lockInterview } from "./interviews";
 import { lockMemoryOwner } from "./legacy-ai-jobs";
+import { invalidateCommitmentContext } from "./open-loops";
 import { proposalPeople } from "./interview-grounding";
 import { NetworkError, type NetworkTx } from "./store";
 
@@ -169,16 +170,25 @@ async function collectImpact(
         .orderBy(asc(confirmedFacts.id))
         .for("update")
     : [];
-  const loopRows = ids.length
-    ? await tx
-        .select()
-        .from(openLoops)
-        .where(
-          and(eq(openLoops.userId, owner), inArray(openLoops.proposalId, ids)),
-        )
-        .orderBy(asc(openLoops.id))
-        .for("update")
-    : [];
+  const loopRows =
+    ids.length || eventIds.length
+      ? await tx
+          .select()
+          .from(openLoops)
+          .where(
+            and(
+              eq(openLoops.userId, owner),
+              or(
+                ids.length ? inArray(openLoops.proposalId, ids) : undefined,
+                eventIds.length
+                  ? inArray(openLoops.interactionId, eventIds)
+                  : undefined,
+              ),
+            ),
+          )
+          .orderBy(asc(openLoops.id))
+          .for("update")
+      : [];
   const updateRows = ids.length
     ? await tx
         .select()
@@ -415,6 +425,41 @@ export async function correctInterviewTurn(
     }
     const now = new Date();
     const personIds = data.personRows.map((row) => row.id);
+    // Conservatively invalidate related interviews under the publication lock.
+    if (data.loopRows.length) {
+      const linked = await tx
+        .select({ id: interviewPeople.interviewId })
+        .from(interviewPeople)
+        .where(
+          and(
+            eq(interviewPeople.userId, owner),
+            inArray(interviewPeople.personId, [
+              ...new Set(data.loopRows.map((row) => row.personId)),
+            ]),
+          ),
+        );
+      const loopProposalIds = data.loopRows.flatMap((row) =>
+        row.proposalId ? [row.proposalId] : [],
+      );
+      const sourceInterviews = loopProposalIds.length
+        ? await tx
+            .select({ id: memoryProposals.interviewId })
+            .from(memoryProposals)
+            .where(
+              and(
+                eq(memoryProposals.userId, owner),
+                inArray(memoryProposals.id, loopProposalIds),
+              ),
+            )
+        : [];
+      await invalidateCommitmentContext(
+        tx,
+        owner,
+        [...new Set([...linked, ...sourceInterviews].map((row) => row.id))]
+          .filter((id) => id !== interviewId)
+          .sort(),
+      );
+    }
     // Retain in-flight lease tokens until callers finish, preventing an overlapping replacement call.
     await tx
       .update(aiProcessingTasks)
@@ -483,14 +528,6 @@ export async function correctInterviewTurn(
           ),
         );
       await tx
-        .delete(openLoops)
-        .where(
-          and(
-            eq(openLoops.userId, owner),
-            inArray(openLoops.proposalId, proposalIds),
-          ),
-        );
-      await tx
         .delete(personalUpdates)
         .where(
           and(
@@ -499,6 +536,16 @@ export async function correctInterviewTurn(
           ),
         );
     }
+    if (data.loopRows.length)
+      await tx.delete(openLoops).where(
+        and(
+          eq(openLoops.userId, owner),
+          inArray(
+            openLoops.id,
+            data.loopRows.map((row) => row.id),
+          ),
+        ),
+      );
     const eventIds = data.eventRows.map((row) => row.id);
     if (eventIds.length) {
       await tx

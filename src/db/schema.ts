@@ -1079,6 +1079,7 @@ export const openLoops = pgTable('open_loops', {
   userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   personId: uuid('person_id').notNull(),
   proposalId: uuid('proposal_id'),
+  interactionId: uuid('interaction_id'),
   body: text('body').notNull(),
   dueOn: date('due_on'),
   status: text('status').$type<'open' | 'done' | 'dismissed'>().notNull().default('open'),
@@ -1088,6 +1089,7 @@ export const openLoops = pgTable('open_loops', {
 }, (t) => [
   index('open_loops_owner_due_idx').on(t.userId, t.status, t.dueOn),
   foreignKey({ columns: [t.personId, t.userId], foreignColumns: [people.id, people.userId] }).onDelete('cascade'),
+  foreignKey({ columns: [t.interactionId, t.userId], foreignColumns: [interactions.id, interactions.userId] }),
   foreignKey({ columns: [t.proposalId, t.userId], foreignColumns: [memoryProposals.id, memoryProposals.userId] }),
 ]);
 
@@ -1105,4 +1107,18 @@ export const personalUpdates = pgTable('personal_updates', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   foreignKey({ columns: [t.proposalId, t.userId], foreignColumns: [memoryProposals.id, memoryProposals.userId] }),
+]);
+
+// Hash-only receipts survive source-driven loop removal so an old request cannot restore it.
+export const openLoopRequests = pgTable('open_loop_requests', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  personId: uuid('person_id').notNull(),
+  loopId: uuid('loop_id').notNull(),
+  requestKey: uuid('request_key').notNull(),
+  requestHash: text('request_hash').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('open_loop_requests_owner_key_uidx').on(t.userId, t.requestKey),
+  foreignKey({ columns: [t.personId, t.userId], foreignColumns: [people.id, people.userId] }).onDelete('cascade'),
 ]);

@@ -23,6 +23,7 @@ import {
   memoryProposals,
   networkAiUsage,
   networkSettings,
+  openLoops,
   people,
   user,
 } from "@/db/schema";
@@ -545,6 +546,7 @@ export async function interviewJobContext(job: Job): Promise<InterviewContext> {
       : [];
     const reviewed = await tx
       .select({
+        id: memoryProposals.id,
         payload: memoryProposals.payload,
         status: memoryProposals.status,
       })
@@ -558,6 +560,20 @@ export async function interviewJobContext(job: Job): Promise<InterviewContext> {
       )
       .orderBy(desc(memoryProposals.createdAt))
       .limit(30);
+    const loopMemory = reviewed.length
+      ? await tx
+          .select()
+          .from(openLoops)
+          .where(
+            and(
+              eq(openLoops.userId, job.userId),
+              inArray(
+                openLoops.proposalId,
+                reviewed.map((row) => row.id),
+              ),
+            ),
+          )
+      : [];
     const context: InterviewContext = {
       mode: interview.mode,
       today: todayInTimezone(settings.timezone),
@@ -567,11 +583,25 @@ export async function interviewJobContext(job: Job): Promise<InterviewContext> {
       people: peopleContext,
       circles: circleRows,
       existingPlans: plans,
-      reviewed: reviewed.map((row) => ({
-        kind: row.payload.kind,
-        status: row.status,
-        summary: JSON.stringify(row.payload).slice(0, 300),
-      })),
+      reviewed: reviewed.map((row) => {
+        const loop = loopMemory.find((loop) => loop.proposalId === row.id);
+        return {
+          kind: row.payload.kind,
+          status: row.status,
+          summary:
+            row.payload.kind === "open_loop" && row.status === "accepted"
+              ? JSON.stringify(
+                  loop
+                    ? {
+                        body: loop.body.slice(0, 300),
+                        dueOn: loop.dueOn,
+                        status: loop.status,
+                      }
+                    : { status: "removed" },
+                )
+              : JSON.stringify(row.payload).slice(0, 300),
+        };
+      }),
     };
     // Keep complete, current turns; never create a quote against a silently truncated turn.
     for (const turn of allTurns) {
