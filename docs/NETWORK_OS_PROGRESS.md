@@ -19,7 +19,7 @@ Implement the full Network OS PRD through M1–M6, including secure private work
 | --- | --- | --- |
 | M0: baseline and design | In progress | Repo and objective inspected; branch created; initial security patches committed; remaining dependency assessment before deployment |
 | M1: people, circles, interactions, cadence | In progress | Storage, owner-scoped routes and working People/Circles/Person/Today UI implemented; 17 unit tests, 8 PostgreSQL tests and full desktop/mobile browser flow passed; production build, type checking and lint passed |
-| M2: interviews and reviewed memory | In progress | Storage, authenticated API, capture/review UI and profile source links implemented; browser and database checks pass. Configured provider boundary and durable local worker implemented; autosave implemented; live-provider verification, source correction and deletion remain |
+| M2: interviews and reviewed memory | In progress | Storage, authenticated API, capture/review UI and profile source links implemented; browser and database checks pass. Configured provider boundary and durable local worker implemented; autosave implemented; source correction/removal implemented; live-provider verification and broader deletion remain |
 | M3: Today and reconnecting | In progress | Due queue derives state on read; open loops, preferences, personal updates and optional grounded drafts remain |
 | M4: cohort import and voice | Not started | Roster source/reconciliation, private audio/transcription |
 | M5: UI and data controls | In progress | Core workspace browser-tested; complete interview/voice UI and export/deletion/privacy remain |
@@ -36,9 +36,11 @@ Implement the full Network OS PRD through M1–M6, including secure private work
 
 ## Continuation
 
-Next: implement source correction/deletion and invalidation before claiming M2 complete. Server-backed draft autosave is implemented and verified; continue from its local checkpoint. The configured AI boundary and durable local interview worker are implemented, but the real-provider smoke test is blocked by an HTTP 401 credential rejection. Do not retry unchanged credentials or treat synthetic provider tests as live verification. Keep reviewing and committing small verified slices. AWS credit coverage, domain and model configuration are deployment inputs; they do not block local work.
+Next: implement M3 dated open-loop controls as a complete slice: owner-scoped create/edit/done/dismiss, Person display, and dated commitments ahead of routine plans on Today. Completing a promise without contact must not advance cadence. Then add personal-update audiences, conversation preferences and optional drafts from approved context. Server-backed draft autosave and entry correction/removal are implemented. Full person/workspace deletion remains M5 work. The configured AI boundary and durable local interview worker are implemented, but the real-provider smoke test is blocked by an HTTP 401 credential rejection. Do not retry unchanged credentials or treat synthetic provider tests as live verification. Keep reviewing and committing small verified slices. AWS credit coverage, domain and model configuration are deployment inputs; they do not block local work.
 
 ## Checkpoints
+
+- `9e2e1ea`: expanded the reusable implementation prompt with the verified slice loop, privacy/security checks, explicit staging and local commit rules.
 
 - `576b476`: committed the PRD, glossary, handoff and baseline record. No private notes committed.
 - `716a395` — M1 storage: nullable person email, same-owner composite foreign keys, circles, explicit interactions, separate contact plans/check-in decisions, settings. Standard PostgreSQL driver replaces Neon HTTP to support atomic operations and future RDS. Remote TLS certificate verification is enforced.
@@ -121,7 +123,7 @@ Remote database connections require a valid certificate chain. Set `DATABASE_CA_
 - Added the final UI safeguards: editor state remounts per interview ID, editing is held during pause/submission transitions, and transitions use the latest acknowledged conversation revision. Committed as `ea4e5ff`; no live schema/data or AWS resource changed. Next full feature is source correction/forgetting with invalidation; M3–M6 remain incomplete.
 
 
-## Legacy AI publication safety — prerequisite for source correction
+## Legacy AI publication safety — `d356e54`
 
 - Inspection found legacy person/thread/mentor workers could write after cancellation and could overwrite a newer generation of the same task. Hardened all three before exposing memory-forgetting controls.
 - Added owner-serialized claims, one unexpired legacy lease per owner, generation identity, two-minute leases, three attempts and delayed retries. Publication rechecks the verified owner, active parent and a hash of current source records. Source text is not copied into job metadata.
@@ -130,3 +132,14 @@ Remote database connections require a valid certificate chain. Set `DATABASE_CA_
 - `/api/ai/process` now uses the common session/origin/bounded-JSON boundary and validates provider configuration. HTTP batches are limited to six tasks; internal import callers retain their existing batch interface. Remaining queued tasks are reported for subsequent processing. No automatic cloud fallback from a missing BYOK key is allowed by this endpoint.
 - All 28 database tests passed, including actual processor execution with an injected fetch fixture, cancellation during inference, rollback, lease recovery, source changes/deletion, archive, foreign targets and corrupt cross-owner links. The browser API test passed (17.5 seconds including startup); it made no model calls. Type checking, lint, final production build and post-build typecheck passed (exec session `63460` completed). No UI changed in this slice.
 - Source correction/forgetting remains the next feature. It must use `lockMemoryOwner` before canceling affected jobs and invalidating derived records, matching the owner lock already used by interview jobs. This is not full deletion support, a complete legacy worker deployment, or a live-provider check. Legacy JSON fallback/model selection and import storage still need the deployment audit.
+
+
+## M2 recollection correction/removal — `f70e60b`
+
+- Added previewed, owner-scoped correction/removal for saved user turns and an accessible Radix confirmation. The preview detects changes to accepted proposals and derived rows even when the interview revision has not changed. Repeated requests use hash-only receipts; previous source bodies and dependent proposal quotes are purged, with empty turn tombstones preventing replay.
+- Invalidates all later assistant generations in the interview, removes their materialized narrative memories, clears linked person summaries/outreach text, and cancels unfinished interview/person AI work under the shared owner lock. Confirmed people/profile fields, met status, memberships, mentor decisions and plan settings are retained only with explicit scope acknowledgment. Other recollections/drafts/imports remain; this is not full M5 deletion.
+- Removed contact evidence is disconnected from historical check-ins before deletion. Remaining qualifying contacts determine last-contact dates; plans affected by removed evidence or plan suggestions pause with a review flag surfaced on Today and Person. Explicit plan review/resume clears that flag.
+- Reviewed additive migration `0009_interview_corrections.sql`, applied only to the disposable database. All 32 integration tests passed, including a forced final-write failure proving source/memory/summary/plan rollback. All 23 unit tests, lint and typechecking passed. The final production build and explicit post-build typecheck passed after the final UI change (exec session `4787` completed).
+- First browser attempt exposed an ambiguous source-text assertion (the text also appears in its supporting quote). Scoped it to the conversation. The next run waited for an exact label on a prefilled textarea; separated labels from controls with explicit IDs. The targeted workflow then passed in 28.3 seconds, including lost-acknowledgment retry, focus return, desktop correction and mobile removal. Simplified zero-count preview text after visual inspection. All six browser workflows passed (2.3 minutes). A final mobile improvement keeps confirmation actions outside the scrolling preview; the targeted rerun passed (21.9 seconds), including viewport assertions for both actions. Final desktop and 390px mobile screenshots were inspected. Added Radix AlertDialog 1.1.23; install audit reports the same 28 existing advisories (0 critical, 13 high, 12 moderate, 3 low), which still need deployment assessment.
+
+- No live schema/data migration, AWS resource change, private record creation or contact outreach occurred. The real-provider gate still needs a working credential and configured model; do not repeat unchanged HTTP 401 attempts. Full M3–M6 work remains. New drafting/retrieval consumers must register source dependencies and extend invalidation, including updates shared through circle audiences, before use.
