@@ -45,3 +45,12 @@ On 2026-09-06, the public OpenRouter catalog listed `openai/gpt-4.1-mini` with J
 ## Interview drafts
 
 Migration `0008_large_power_pack.sql` adds one private draft per interview, an independent draft revision and the last idempotency key. Draft changes do not advance the submitted-conversation revision or queue AI work. The client debounces typing, serializes requests, retries uncertain acknowledgments with the same key, and reports a saved state only after server acknowledgment. No persistent browser storage is used. Conflicts retain local words for comparison; another tab cannot silently replace the saved draft. Submitting the draft checks its revision and words and clears it in the same transaction as the new turn.
+
+
+## Legacy summary processing
+
+The existing thread, person and mentor-review processor now uses durable leases and source checks on the same task table. Only one legacy inference per owner can hold an unexpired lease. Leases last two minutes; each request has a 45-second timeout and at most three application attempts with backoff. Re-enqueueing invalidates the earlier generation. Results, downstream work and completion share one transaction. Changed/deleted sources, archived targets, revoked owner access and canceled or superseded tasks cannot publish late results.
+
+The authenticated `/api/ai/process` endpoint processes at most six tasks per call and returns the remaining queue count. It validates the selected provider and requires a key for BYOK; malformed configuration does not silently select cloud processing. The existing internal importer may request a larger batch. These jobs are still driven by the legacy importer/API; the standalone `worker:network` command currently claims interview tasks only. Durable SQS delivery of the full import pipeline remains M6 work.
+
+Memory correction/deletion transactions must acquire the owner's `network_settings` row through `lockMemoryOwner` before canceling tasks, removing source records and invalidating summaries. Legacy and interview publication serialize against that same owner row. This ordering prevents a result from being published between source invalidation and transaction completion.

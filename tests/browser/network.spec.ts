@@ -533,3 +533,19 @@ test('private drafts autosave, survive reload, recover failed acknowledgments an
   expect(record.turns.filter((turn) => turn.role === 'user')).toHaveLength(1);
   expect(record.interview.draftContent).toBe('');
 });
+
+test('legacy processing rejects unsafe inputs before invoking any model', async ({ context }) => {
+  for (const data of [
+    { maxTasks: 80 },
+    { maxTasks: -1 },
+    { providerMode: 'unexpected' },
+    { providerMode: 'byok' },
+    { byokProvider: 'arbitrary-host' },
+    { modelUrl: 'http://169.254.169.254' },
+  ]) {
+    const response = await context.request.post('/api/ai/process', { headers: { origin }, data });
+    expect(response.status()).toBe(400);
+  }
+  expect((await context.request.post('/api/ai/process', { headers: { origin: 'https://untrusted.example' }, data: {} })).status()).toBe(403);
+  expect((await context.request.post('/api/ai/process', { headers: { origin }, data: { byokApiKey: 'x'.repeat(70_000) } })).status()).toBe(413);
+});

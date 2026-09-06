@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import type OpenAI from "openai";
 import { db } from "@/db";
@@ -14,10 +15,18 @@ import {
 } from "@/db/schema";
 import { createAIClient, getDefaultAIModel } from "@/lib/openrouter";
 import type { BYOKProvider } from "@/types";
+import type { NetworkTx } from "@/lib/network/store";
+import {
+  claimLegacyJob,
+  publishLegacyJob,
+  failLegacyJob,
+  LEGACY_TASK_TYPES,
+  type LegacyJob,
+} from "@/lib/network/legacy-ai-jobs";
 
 type AIMode = "cloud" | "byok" | "local";
-type AITaskType = "thread_summarizer" | "person_summarizer" | "mentor_signal_reviewer";
-const LEGACY_TASK_TYPES: AITaskType[] = ['thread_summarizer', 'person_summarizer', 'mentor_signal_reviewer'];
+type AITaskType =
+  "thread_summarizer" | "person_summarizer" | "mentor_signal_reviewer";
 
 interface ProcessorOptions {
   userId: string;
@@ -86,33 +95,41 @@ async function chatJson<T>({
   payload: unknown;
   fallback: T;
 }): Promise<T> {
-  const response = await client.chat.completions.create({
-    model,
-    messages: [
-      { role: "system", content: system },
-      { role: "user", content: JSON.stringify(payload) },
-    ],
-    temperature: 0.15,
-  });
+  const response = await client.chat.completions.create(
+    {
+      model,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: JSON.stringify(payload) },
+      ],
+      temperature: 0.15,
+      max_tokens: 4096,
+    },
+    { timeout: 45000, maxRetries: 0 },
+  );
   return safeJson(response.choices[0]?.message?.content ?? "", fallback);
 }
 
-export async function enqueueAITask({
-  userId,
-  taskType,
-  targetType,
-  targetId,
-  priority = 50,
-  metadata = {},
-}: {
-  userId: string;
-  taskType: AITaskType;
-  targetType: "thread" | "person";
-  targetId: string;
-  priority?: number;
-  metadata?: Record<string, unknown>;
-}) {
-  await db
+export async function enqueueAITask(
+  {
+    userId,
+    taskType,
+    targetType,
+    targetId,
+    priority = 50,
+    metadata = {},
+  }: {
+    userId: string;
+    taskType: AITaskType;
+    targetType: "thread" | "person";
+    targetId: string;
+    priority?: number;
+    metadata?: Record<string, unknown>;
+  },
+  executor: typeof db | NetworkTx = db,
+) {
+  const generationKey = randomUUID();
+  await executor
     .insert(aiProcessingTasks)
     .values({
       userId,
@@ -121,6 +138,8 @@ export async function enqueueAITask({
       targetId,
       priority,
       metadata,
+      generationKey,
+      availableAt: new Date(),
       status: "queued",
       attempts: 0,
       errorMessage: null,
@@ -128,11 +147,18 @@ export async function enqueueAITask({
       completedAt: null,
     })
     .onConflictDoUpdate({
-      target: [aiProcessingTasks.userId, aiProcessingTasks.taskType, aiProcessingTasks.targetId],
+      target: [
+        aiProcessingTasks.userId,
+        aiProcessingTasks.taskType,
+        aiProcessingTasks.targetId,
+      ],
       set: {
         status: "queued",
         priority,
         metadata,
+        generationKey,
+        availableAt: new Date(),
+        errorCategory: null,
         attempts: 0,
         errorMessage: null,
         startedAt: null,
@@ -142,7 +168,10 @@ export async function enqueueAITask({
     });
 }
 
-export async function enqueueThreadSummaryTasks(userId: string, threadIds: string[]) {
+export async function enqueueThreadSummaryTasks(
+  userId: string,
+  threadIds: string[],
+) {
   for (const threadId of Array.from(new Set(threadIds))) {
     await enqueueAITask({
       userId,
@@ -154,15 +183,22 @@ export async function enqueueThreadSummaryTasks(userId: string, threadIds: strin
   }
 }
 
-export async function enqueuePersonSummaryTasks(userId: string, personIds: string[]) {
+export async function enqueuePersonSummaryTasks(
+  userId: string,
+  personIds: string[],
+  executor: typeof db | NetworkTx = db,
+) {
   for (const personId of Array.from(new Set(personIds))) {
-    await enqueueAITask({
-      userId,
-      taskType: "person_summarizer",
-      targetType: "person",
-      targetId: personId,
-      priority: 60,
-    });
+    await enqueueAITask(
+      {
+        userId,
+        taskType: "person_summarizer",
+        targetType: "person",
+        targetId: personId,
+        priority: 60,
+      },
+      executor,
+    );
   }
 }
 
@@ -174,58 +210,50 @@ export async function processQueuedAITasks({
   byokProvider,
   maxTasks = 60,
   onProgress,
-}: ProcessorOptions): Promise<{ completed: number; failed: number; remaining: number }> {
-  const client = createAIClient(mode, apiKey, byokProvider);
+}: ProcessorOptions): Promise<{
+  completed: number;
+  failed: number;
+  remaining: number;
+}> {
+  const client = createAIClient(mode, apiKey, byokProvider).withOptions({ logLevel: "off", timeout: 45000, maxRetries: 0 });
   const effectiveModel = getDefaultAIModel(mode, model, byokProvider);
   let completed = 0;
   let failed = 0;
 
   while (completed + failed < maxTasks) {
-    const [task] = await db
-      .select()
-      .from(aiProcessingTasks)
-      .where(and(eq(aiProcessingTasks.userId, userId), eq(aiProcessingTasks.status, "queued"), inArray(aiProcessingTasks.taskType, LEGACY_TASK_TYPES)))
-      .orderBy(desc(aiProcessingTasks.priority), aiProcessingTasks.createdAt)
-      .limit(1);
-
+    const task = await claimLegacyJob(userId, effectiveModel);
     if (!task) break;
-
-    await db
-      .update(aiProcessingTasks)
-      .set({
-        status: "processing",
-        attempts: task.attempts + 1,
-        startedAt: new Date(),
-        model: effectiveModel,
-        updatedAt: new Date(),
-      })
-      .where(eq(aiProcessingTasks.id, task.id));
-
     try {
-      if (task.taskType === "thread_summarizer") {
-        await processThreadTask(userId, task.targetId, client, effectiveModel);
-      } else if (task.taskType === "person_summarizer") {
-        await processPersonTask(userId, task.targetId, client, effectiveModel);
-      } else if (task.taskType === "mentor_signal_reviewer") {
-        await processMentorTask(userId, task.targetId, client, effectiveModel);
-      }
-
-      await db
-        .update(aiProcessingTasks)
-        .set({ status: "complete", completedAt: new Date(), updatedAt: new Date() })
-        .where(eq(aiProcessingTasks.id, task.id));
-      completed++;
-      onProgress?.(completed, maxTasks);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown AI task error";
-      await db
-        .update(aiProcessingTasks)
-        .set({
-          status: task.attempts >= 2 ? "failed" : "queued",
-          errorMessage: message,
-          updatedAt: new Date(),
-        })
-        .where(eq(aiProcessingTasks.id, task.id));
+      const committed =
+        task.taskType === "thread_summarizer"
+          ? await processThreadTask(
+              userId,
+              task.targetId,
+              client,
+              effectiveModel,
+              task,
+            )
+          : task.taskType === "person_summarizer"
+            ? await processPersonTask(
+                userId,
+                task.targetId,
+                client,
+                effectiveModel,
+                task,
+              )
+            : await processMentorTask(
+                userId,
+                task.targetId,
+                client,
+                effectiveModel,
+                task,
+              );
+      if (committed) {
+        completed++;
+        onProgress?.(completed, maxTasks);
+      } else failed++;
+    } catch {
+      await failLegacyJob(task);
       failed++;
     }
   }
@@ -233,7 +261,13 @@ export async function processQueuedAITasks({
   const remaining = await db
     .select()
     .from(aiProcessingTasks)
-    .where(and(eq(aiProcessingTasks.userId, userId), eq(aiProcessingTasks.status, "queued"), inArray(aiProcessingTasks.taskType, LEGACY_TASK_TYPES)));
+    .where(
+      and(
+        eq(aiProcessingTasks.userId, userId),
+        eq(aiProcessingTasks.status, "queued"),
+        inArray(aiProcessingTasks.taskType, [...LEGACY_TASK_TYPES]),
+      ),
+    );
 
   return { completed, failed, remaining: remaining.length };
 }
@@ -242,7 +276,8 @@ async function processThreadTask(
   userId: string,
   threadId: string,
   client: OpenAI,
-  model: string
+  model: string,
+  job: LegacyJob,
 ) {
   const [thread] = await db
     .select()
@@ -254,7 +289,12 @@ async function processThreadTask(
   const messages = await db
     .select()
     .from(emailMessages)
-    .where(and(eq(emailMessages.threadId, thread.id), eq(emailMessages.userId, userId)));
+    .where(
+      and(
+        eq(emailMessages.threadId, thread.id),
+        eq(emailMessages.userId, userId),
+      ),
+    );
 
   const result = await chatJson<ThreadSummaryResult>({
     client,
@@ -277,7 +317,9 @@ Do not write outreach drafts. If context is thin, set confidence to low and say 
       })),
     },
     fallback: {
-      summary: thread.snippet ?? "Needs review: no message body was available for this thread.",
+      summary:
+        thread.snippet ??
+        "Needs review: no message body was available for this thread.",
       topics: thread.subject ? [thread.subject] : [],
       decisions: "",
       personal_details: "",
@@ -287,30 +329,44 @@ Do not write outreach drafts. If context is thin, set confidence to low and say 
     },
   });
 
-  await db.insert(aiThreadSummaries).values({
-    threadId: thread.id,
-    summary: result.summary,
-    topics: result.topics ?? [],
-    decisions: result.decisions,
-    personalDetails: result.personal_details,
-    followUpSignals: result.follow_up_signals,
-    relationshipEvidence: result.relationship_evidence ?? [],
-    confidence: result.confidence ?? "medium",
-    model,
-  });
+  return publishLegacyJob(job, async (tx) => {
+    await tx.insert(aiThreadSummaries).values({
+      threadId: thread.id,
+      summary: result.summary,
+      topics: result.topics ?? [],
+      decisions: result.decisions,
+      personalDetails: result.personal_details,
+      followUpSignals: result.follow_up_signals,
+      relationshipEvidence: result.relationship_evidence ?? [],
+      confidence: result.confidence ?? "medium",
+      model,
+    });
 
-  const links = await db
-    .select()
-    .from(personThreadLinks)
-    .where(eq(personThreadLinks.threadId, thread.id));
-  await enqueuePersonSummaryTasks(userId, links.map((link) => link.personId));
+    const links = await tx
+      .select()
+      .from(personThreadLinks)
+      .innerJoin(
+        people,
+        and(
+          eq(people.id, personThreadLinks.personId),
+          eq(people.userId, userId),
+        ),
+      )
+      .where(eq(personThreadLinks.threadId, thread.id));
+    await enqueuePersonSummaryTasks(
+      userId,
+      links.map((link) => link.person_thread_links.personId),
+      tx,
+    );
+  });
 }
 
 async function processPersonTask(
   userId: string,
   personId: string,
   client: OpenAI,
-  model: string
+  model: string,
+  job: LegacyJob,
 ) {
   const [person] = await db
     .select()
@@ -319,10 +375,23 @@ async function processPersonTask(
     .limit(1);
   if (!person) throw new Error("Person not found");
 
-  const links = await db.select().from(personThreadLinks).where(eq(personThreadLinks.personId, person.id));
+  const links = await db
+    .select({ threadId: emailThreads.id })
+    .from(personThreadLinks)
+    .innerJoin(
+      emailThreads,
+      and(
+        eq(emailThreads.id, personThreadLinks.threadId),
+        eq(emailThreads.userId, userId),
+      ),
+    )
+    .where(eq(personThreadLinks.personId, person.id));
   const threadIds = links.map((link) => link.threadId);
   const threadSummaries = threadIds.length
-    ? await db.select().from(aiThreadSummaries).where(inArray(aiThreadSummaries.threadId, threadIds))
+    ? await db
+        .select()
+        .from(aiThreadSummaries)
+        .where(inArray(aiThreadSummaries.threadId, threadIds))
     : [];
   const manualNotes = await db
     .select()
@@ -346,11 +415,23 @@ If evidence is thin or mostly administrative/list traffic, set needs_review true
         current_relationship_type: person.relationshipType,
         last_contacted_at: person.lastContactedAt,
       },
-      manual_notes: manualNotes.map((note) => ({
-        body: note.body,
-        tags: note.tags,
-        created_at: note.createdAt,
-      })).concat(person.manualNotes ? [{ body: person.manualNotes, tags: ["profile"], created_at: person.updatedAt }] : []),
+      manual_notes: manualNotes
+        .map((note) => ({
+          body: note.body,
+          tags: note.tags,
+          created_at: note.createdAt,
+        }))
+        .concat(
+          person.manualNotes
+            ? [
+                {
+                  body: person.manualNotes,
+                  tags: ["profile"],
+                  created_at: person.updatedAt,
+                },
+              ]
+            : [],
+        ),
       thread_summaries: threadSummaries.slice(0, 80).map((summary) => ({
         summary: summary.summary,
         topics: summary.topics,
@@ -362,7 +443,8 @@ If evidence is thin or mostly administrative/list traffic, set needs_review true
       })),
     },
     fallback: {
-      summary: "Needs review: there is not enough processed context yet to summarize this relationship.",
+      summary:
+        "Needs review: there is not enough processed context yet to summarize this relationship.",
       how_you_know_them: "",
       why_they_matter: "",
       notable_advice: "",
@@ -375,39 +457,52 @@ If evidence is thin or mostly administrative/list traffic, set needs_review true
     },
   });
 
-  await db.insert(aiPersonSummaries).values({
-    personId: person.id,
-    summary: result.summary,
-    howYouKnowThem: result.how_you_know_them,
-    whyTheyMatter: result.why_they_matter,
-    naturalNextMessage: null,
-    notableAdvice: result.notable_advice,
-    personalDetails: result.personal_details,
-    openLoops: result.open_loops,
-    mentorSignalScore: Math.max(0, Math.min(100, result.mentor_signal_score ?? 0)),
-    mentorSignalEvidence: result.mentor_signal_evidence ?? [],
-    needsReview: result.needs_review ?? false,
-    classification: result.classification ?? "unknown",
-    model,
-  });
+  return publishLegacyJob(job, async (tx) => {
+    await tx.insert(aiPersonSummaries).values({
+      personId: person.id,
+      summary: result.summary,
+      howYouKnowThem: result.how_you_know_them,
+      whyTheyMatter: result.why_they_matter,
+      naturalNextMessage: null,
+      notableAdvice: result.notable_advice,
+      personalDetails: result.personal_details,
+      openLoops: result.open_loops,
+      mentorSignalScore: Math.max(
+        0,
+        Math.min(100, result.mentor_signal_score ?? 0),
+      ),
+      mentorSignalEvidence: result.mentor_signal_evidence ?? [],
+      needsReview: result.needs_review ?? false,
+      classification: result.classification ?? "unknown",
+      model,
+    });
 
-  await db
-    .update(people)
-    .set({
-      relationshipType: person.reviewStatus === "new" || person.reviewStatus === "needs_review"
-        ? result.classification ?? person.relationshipType
-        : person.relationshipType,
-      importanceScore: Math.max(person.importanceScore, Math.min(100, result.mentor_signal_score ?? 0)),
-      updatedAt: new Date(),
-    })
-    .where(eq(people.id, person.id));
+    await tx
+      .update(people)
+      .set({
+        relationshipType:
+          person.reviewStatus === "new" ||
+          person.reviewStatus === "needs_review"
+            ? (result.classification ?? person.relationshipType)
+            : person.relationshipType,
+        importanceScore: Math.max(
+          person.importanceScore,
+          Math.min(100, result.mentor_signal_score ?? 0),
+        ),
+        updatedAt: new Date(),
+      })
+      .where(eq(people.id, person.id));
 
-  await enqueueAITask({
-    userId,
-    taskType: "mentor_signal_reviewer",
-    targetType: "person",
-    targetId: person.id,
-    priority: 40,
+    await enqueueAITask(
+      {
+        userId,
+        taskType: "mentor_signal_reviewer",
+        targetType: "person",
+        targetId: person.id,
+        priority: 40,
+      },
+      tx,
+    );
   });
 }
 
@@ -415,7 +510,8 @@ async function processMentorTask(
   userId: string,
   personId: string,
   client: OpenAI,
-  model: string
+  model: string,
+  job: LegacyJob,
 ) {
   const [person] = await db
     .select()
@@ -434,7 +530,12 @@ async function processMentorTask(
   const [existing] = await db
     .select()
     .from(outreachTasks)
-    .where(eq(outreachTasks.personId, person.id))
+    .where(
+      and(
+        eq(outreachTasks.personId, person.id),
+        eq(outreachTasks.userId, userId),
+      ),
+    )
     .orderBy(desc(outreachTasks.createdAt))
     .limit(1);
 
@@ -445,23 +546,30 @@ async function processMentorTask(
         ? "not_mentor"
         : person.relationshipType === "friend"
           ? "friend"
-          : person.reviewStatus === "confirmed" && person.relationshipType === "mentor"
+          : person.reviewStatus === "confirmed" &&
+              person.relationshipType === "mentor"
             ? "confirmed"
             : null;
 
-  if (userDecisionStatus) {
-    if (existing) {
-      await db
-        .update(outreachTasks)
-        .set({
-          status: userDecisionStatus,
-          completedAt: userDecisionStatus === "confirmed" || userDecisionStatus === "friend" || userDecisionStatus === "not_mentor" || userDecisionStatus === "archived" ? new Date() : null,
-          updatedAt: new Date(),
-        })
-        .where(eq(outreachTasks.id, existing.id));
-    }
-    return;
-  }
+  if (userDecisionStatus)
+    return publishLegacyJob(job, async (tx) => {
+      if (existing) {
+        await tx
+          .update(outreachTasks)
+          .set({
+            status: userDecisionStatus,
+            completedAt:
+              userDecisionStatus === "confirmed" ||
+              userDecisionStatus === "friend" ||
+              userDecisionStatus === "not_mentor" ||
+              userDecisionStatus === "archived"
+                ? new Date()
+                : null,
+            updatedAt: new Date(),
+          })
+          .where(eq(outreachTasks.id, existing.id));
+      }
+    });
 
   const result = await chatJson<MentorSignalResult>({
     client,
@@ -480,29 +588,47 @@ Return JSON only with keys: score, reason, evidence, status.
     },
     fallback: {
       score: summary?.mentorSignalScore ?? 0,
-      reason: summary?.whyTheyMatter ?? "Needs review: no mentor evidence has been generated yet.",
+      reason:
+        summary?.whyTheyMatter ??
+        "Needs review: no mentor evidence has been generated yet.",
       evidence: summary?.mentorSignalEvidence ?? [],
-      status: (summary?.mentorSignalScore ?? 0) >= 50 ? "queued" : "needs_review",
+      status:
+        (summary?.mentorSignalScore ?? 0) >= 50 ? "queued" : "needs_review",
     },
   });
 
-  const status = result.status === "queued" || result.status === "needs_review" || result.status === "not_mentor" ? result.status : "needs_review";
+  const status =
+    result.status === "queued" ||
+    result.status === "needs_review" ||
+    result.status === "not_mentor"
+      ? result.status
+      : "needs_review";
 
   const values = {
     userId,
     personId: person.id,
     priority: Math.max(0, Math.min(100, result.score ?? 0)),
     status,
-    reason: [result.reason, ...(result.evidence ?? []).map((item) => `Evidence: ${item}`)].filter(Boolean).join("\n"),
+    reason: [
+      result.reason,
+      ...(result.evidence ?? []).map((item) => `Evidence: ${item}`),
+    ]
+      .filter(Boolean)
+      .join("\n"),
     suggestedTone: "mentor-signal evidence",
     draftMessage: null,
     dueAt: null,
     updatedAt: new Date(),
   };
 
-  if (existing) {
-    await db.update(outreachTasks).set(values).where(eq(outreachTasks.id, existing.id));
-  } else {
-    await db.insert(outreachTasks).values(values);
-  }
+  return publishLegacyJob(job, async (tx) => {
+    if (existing) {
+      await tx
+        .update(outreachTasks)
+        .set(values)
+        .where(eq(outreachTasks.id, existing.id));
+    } else {
+      await tx.insert(outreachTasks).values(values);
+    }
+  });
 }

@@ -521,3 +521,129 @@ test('unsubmitted drafts never enter interview model context or create generatio
   assert.equal(JSON.stringify(await interviewJobContext(job)).includes('draft-only-private-needle'), false);
   assert.equal((await getInterview(owner, interview.id)).turns.length, 0);
 });
+
+async function legacyFixture() {
+  const { aiProcessingTasks } = await import('../../src/db/schema');
+  const { inArray } = await import('drizzle-orm');
+  const { LEGACY_TASK_TYPES } = await import('../../src/lib/network/legacy-ai-jobs');
+  await db.delete(aiProcessingTasks).where(and(eq(aiProcessingTasks.userId, owner), inArray(aiProcessingTasks.taskType, [...LEGACY_TASK_TYPES])));
+  process.env.PRIVATE_USER_EMAILS = `${owner}@example.test`;
+  return createPerson(owner, { name: 'Legacy worker fixture' });
+}
+
+test('legacy leases claim once, recover after expiry, and atomically publish output with completion', async () => {
+  const person = await legacyFixture();
+  const { enqueueAITask } = await import('../../src/lib/ai-task-processor');
+  const { claimLegacyJob, publishLegacyJob } = await import('../../src/lib/network/legacy-ai-jobs');
+  const { aiProcessingTasks, aiPersonSummaries } = await import('../../src/db/schema');
+  await enqueueAITask({ userId: owner, taskType: 'person_summarizer', targetType: 'person', targetId: person.id });
+  const claims = await Promise.all([claimLegacyJob(owner, 'fixture/model'), claimLegacyJob(owner, 'fixture/model')]);
+  const first = claims.find(Boolean)!; assert.ok(first); assert.equal(claims.filter(Boolean).length, 1);
+  await db.update(aiProcessingTasks).set({ leaseExpiresAt: new Date(0) }).where(eq(aiProcessingTasks.id, first.id));
+  const recovered = await claimLegacyJob(owner, 'fixture/model'); assert.ok(recovered); assert.notEqual(first.leaseToken, recovered.leaseToken);
+  let staleWrites = 0;
+  assert.equal(await publishLegacyJob(first, async () => { staleWrites++; }), false); assert.equal(staleWrites, 0);
+  await assert.rejects(() => publishLegacyJob(recovered, async (tx) => {
+    await tx.insert(aiPersonSummaries).values({ personId: person.id, summary: 'Must roll back' });
+    throw new Error('Fixture rollback');
+  }));
+  assert.equal((await db.select().from(aiPersonSummaries).where(eq(aiPersonSummaries.personId, person.id))).length, 0);
+  assert.equal(await publishLegacyJob(recovered, async (tx) => { await tx.insert(aiPersonSummaries).values({ personId: person.id, summary: 'One verified fixture summary' }); }), true);
+  assert.equal(await publishLegacyJob(recovered, async () => { staleWrites++; }), false);
+  assert.equal((await db.select().from(aiPersonSummaries).where(eq(aiPersonSummaries.personId, person.id))).length, 1);
+  assert.equal((await db.select().from(aiProcessingTasks).where(eq(aiProcessingTasks.id, first.id)))[0].status, 'complete');
+});
+
+test('legacy publication rejects changed or deleted source notes, archived people and foreign targets', async () => {
+  const { enqueueAITask } = await import('../../src/lib/ai-task-processor');
+  const { claimLegacyJob, publishLegacyJob } = await import('../../src/lib/network/legacy-ai-jobs');
+  const { notes } = await import('../../src/db/schema');
+  for (const change of ['edit', 'delete', 'archive', 'decision']) {
+    const person = await legacyFixture();
+    const [note] = await db.insert(notes).values({ userId: owner, personId: person.id, body: 'Source fixture before change' }).returning();
+    await enqueueAITask({ userId: owner, taskType: 'person_summarizer', targetType: 'person', targetId: person.id });
+    const job = await claimLegacyJob(owner, 'fixture/model'); assert.ok(job);
+    if (change === 'edit') await db.update(notes).set({ body: 'Corrected source' }).where(eq(notes.id, note.id));
+    if (change === 'delete') await db.delete(notes).where(eq(notes.id, note.id));
+    if (change === 'archive') await db.update(people).set({ archivedAt: new Date() }).where(eq(people.id, person.id));
+    if (change === 'decision') await db.update(people).set({ relationshipType: 'friend' }).where(eq(people.id, person.id));
+    let writes = 0; assert.equal(await publishLegacyJob(job, async () => { writes++; }), false); assert.equal(writes, 0);
+  }
+  await legacyFixture();
+  const foreign = await createPerson(stranger, { name: 'Foreign legacy fixture' });
+  await enqueueAITask({ userId: owner, taskType: 'person_summarizer', targetType: 'person', targetId: foreign.id });
+  assert.equal(await claimLegacyJob(owner, 'fixture/model'), null);
+  assert.equal(await claimLegacyJob(stranger, 'fixture/model'), null);
+});
+
+test('a re-enqueued legacy task invalidates the old generation and failures cannot revive canceled work', async () => {
+  const person = await legacyFixture();
+  const { enqueueAITask } = await import('../../src/lib/ai-task-processor');
+  const { claimLegacyJob, publishLegacyJob, failLegacyJob } = await import('../../src/lib/network/legacy-ai-jobs');
+  const { aiProcessingTasks } = await import('../../src/db/schema');
+  const input = { userId: owner, taskType: 'person_summarizer' as const, targetType: 'person' as const, targetId: person.id };
+  await enqueueAITask(input); const old = await claimLegacyJob(owner, 'fixture/model'); assert.ok(old);
+  await enqueueAITask(input);
+  assert.equal(await claimLegacyJob(owner, 'fixture/model'), null);
+  assert.equal(await publishLegacyJob(old, async () => { throw new Error('Stale writer called'); }), false);
+  const next = await claimLegacyJob(owner, 'fixture/model'); assert.ok(next); assert.notEqual(next.generationKey, old.generationKey);
+  await db.update(aiProcessingTasks).set({ status: 'canceled' }).where(eq(aiProcessingTasks.id, next.id));
+  await failLegacyJob(next);
+  const [stored] = await db.select().from(aiProcessingTasks).where(eq(aiProcessingTasks.id, next.id));
+  assert.equal(stored.status, 'canceled'); assert.equal(stored.leaseToken, null); assert.equal(stored.errorMessage, null);
+});
+
+test('the actual legacy processor commits its summary and downstream job together and discards canceled inference', async () => {
+  const { enqueueAITask, processQueuedAITasks } = await import('../../src/lib/ai-task-processor');
+  const { aiProcessingTasks, aiPersonSummaries } = await import('../../src/db/schema');
+  const originalFetch = globalThis.fetch;
+  try {
+    for (const canceled of [false, true]) {
+      const person = await legacyFixture();
+      await enqueueAITask({ userId: owner, taskType: 'person_summarizer', targetType: 'person', targetId: person.id });
+      let calls = 0;
+      globalThis.fetch = async () => {
+        calls++;
+        if (canceled) await db.update(aiProcessingTasks).set({ status: 'canceled' }).where(and(eq(aiProcessingTasks.userId, owner), eq(aiProcessingTasks.targetId, person.id)));
+        return new Response(JSON.stringify({ id: 'fixture-completion', object: 'chat.completion', created: 0, model: 'fixture/model', choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content: JSON.stringify({ summary: 'Synthetic remembered detail', how_you_know_them: '', why_they_matter: '', notable_advice: '', personal_details: '', open_loops: '', classification: 'unknown', mentor_signal_score: 0, mentor_signal_evidence: [], needs_review: true }) } }] }), { headers: { 'content-type': 'application/json' } });
+      };
+      const result = await processQueuedAITasks({ userId: owner, mode: 'byok', byokProvider: 'openai', apiKey: 'test-only-no-provider-call', model: 'fixture/model', maxTasks: 1 });
+      assert.equal(calls, 1); assert.equal(result.completed, canceled ? 0 : 1);
+      assert.equal((await db.select().from(aiPersonSummaries).where(eq(aiPersonSummaries.personId, person.id))).length, canceled ? 0 : 1);
+      const downstream = await db.select().from(aiProcessingTasks).where(and(eq(aiProcessingTasks.userId, owner), eq(aiProcessingTasks.targetId, person.id), eq(aiProcessingTasks.taskType, 'mentor_signal_reviewer')));
+      assert.equal(downstream.length, canceled ? 0 : 1);
+    }
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test('legacy thread and mentor writers preserve downstream work and isolate cross-owner links', async () => {
+  const { enqueueAITask, processQueuedAITasks } = await import('../../src/lib/ai-task-processor');
+  const { aiProcessingTasks, aiThreadSummaries, emailThreads, emailMessages, personThreadLinks, outreachTasks } = await import('../../src/db/schema');
+  const originalFetch = globalThis.fetch;
+  try {
+    const person = await legacyFixture();
+    const [thread] = await db.insert(emailThreads).values({ userId: owner, gmailThreadId: randomUUID(), subject: 'Owned thread fixture' }).returning();
+    await db.insert(emailMessages).values({ userId: owner, threadId: thread.id, gmailMessageId: randomUUID(), senderEmail: 'fixture@example.test', body: 'Owned thread context' });
+    await db.insert(personThreadLinks).values({ personId: person.id, threadId: thread.id });
+    const foreign = await createPerson(stranger, { name: 'Foreign downstream fixture' });
+    // Deliberately corrupt a legacy link: ownership must still be enforced at every boundary.
+    await db.insert(personThreadLinks).values({ personId: foreign.id, threadId: thread.id });
+    await enqueueAITask({ userId: owner, taskType: 'thread_summarizer', targetType: 'thread', targetId: thread.id });
+    let payload = '';
+    globalThis.fetch = async (_url, init) => {
+      payload = String(init?.body ?? '');
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ summary: 'Owned thread summary', topics: [], decisions: '', personal_details: '', follow_up_signals: '', relationship_evidence: [], confidence: 'low', score: 20, reason: 'A synthetic mentor review', evidence: [], status: 'needs_review' }) } }] }), { headers: { 'content-type': 'application/json' } });
+    };
+    const run = () => processQueuedAITasks({ userId: owner, mode: 'byok', byokProvider: 'openai', apiKey: 'test-only-no-provider-call', model: 'fixture/model', maxTasks: 1 });
+    assert.equal((await run()).completed, 1);
+    assert.equal((await db.select().from(aiThreadSummaries).where(eq(aiThreadSummaries.threadId, thread.id))).length, 1);
+    assert.equal((await db.select().from(aiProcessingTasks).where(and(eq(aiProcessingTasks.userId, owner), eq(aiProcessingTasks.targetId, foreign.id)))).length, 0);
+    const [foreignThread] = await db.insert(emailThreads).values({ userId: stranger, gmailThreadId: randomUUID() }).returning();
+    await db.insert(personThreadLinks).values({ personId: person.id, threadId: foreignThread.id });
+    await db.insert(aiThreadSummaries).values({ threadId: foreignThread.id, summary: 'foreign-context-must-not-reach-provider' });
+    assert.equal((await run()).completed, 1);
+    assert.equal(payload.includes('foreign-context-must-not-reach-provider'), false);
+    assert.equal((await run()).completed, 1);
+    assert.equal((await db.select().from(outreachTasks).where(and(eq(outreachTasks.userId, owner), eq(outreachTasks.personId, person.id)))).length, 1);
+  } finally { globalThis.fetch = originalFetch; }
+});
