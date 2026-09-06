@@ -2,7 +2,7 @@
 
 ## Objective and completion criteria
 
-Implement the full Network OS PRD through M1–M6, including secure private workflows, polished responsive UI, durable jobs/files, verified AWS deployment and a tested RDS migration (or an explicitly documented deployment exception). A successful local build alone is not completion. No messages may be sent to contacts. Local commits only; no push or merge.
+Implement the full Network OS PRD through M1–M6, including secure private workflows, polished responsive UI, durable jobs/files, verified AWS deployment and a tested RDS migration (or an explicitly documented deployment exception). A successful local build alone is not completion. No messages may be sent to contacts. Local commits and an explicit branch push are authorized; the owner requested push/deploy on 2026-09-06. No merge into main.
 
 ## Baseline — 2026-09-06
 
@@ -20,10 +20,10 @@ Implement the full Network OS PRD through M1–M6, including secure private work
 | M0: baseline and design | In progress | Repo and objective inspected; branch created; initial security patches committed; remaining dependency assessment before deployment |
 | M1: people, circles, interactions, cadence | In progress | Storage, owner-scoped routes and working People/Circles/Person/Today UI implemented; 17 unit tests, 8 PostgreSQL tests and full desktop/mobile browser flow passed; production build, type checking and lint passed |
 | M2: interviews and reviewed memory | In progress | Storage, authenticated API, capture/review UI and profile source links implemented; browser and database checks pass. Configured provider boundary and durable local worker implemented; autosave implemented; source correction/removal implemented; live-provider verification and broader deletion remain |
-| M3: Today and reconnecting | In progress | Due queue groups dated commitments before routine plans; open-loop controls implemented; conversation preferences implemented; personal-update library verified; commit pending; optional grounded drafts remain |
+| M3: Today and reconnecting | In progress | Due queue groups dated commitments before routine plans; open-loop controls implemented; conversation preferences implemented; personal-update library committed as 1e8b33a; optional grounded drafts remain |
 | M4: cohort import and voice | Not started | Roster source/reconciliation, private audio/transcription |
 | M5: UI and data controls | In progress | Core workspace browser-tested; complete interview/voice UI and export/deletion/privacy remain |
-| M6: AWS, workers, RDS | Not started | Credit/cost/resource audit, IaC, durable storage/jobs, migration/restore/deployment |
+| M6: AWS, workers, RDS | In progress | CDK/container/release packaging prepared and locally checked; actual provisioning, production security review, durable runtime files/jobs, migration/restore and cloud verification remain |
 
 ## Security findings to resolve
 
@@ -167,7 +167,7 @@ Remote database connections require a valid certificate chain. Set `DATABASE_CA_
 - No AI calls, private record creation, deployment, live database migration, messages to contacts or pushes. Next source-aware draft generation must account for preference changes; this slice does not silently pass these private fields into existing interview/legacy models.
 
 
-## M3 personal-update library — verified, commit pending
+## M3 personal-update library — `1e8b33a`
 
 - Implemented `/updates`, owner-scoped create/edit/remove routes, optional dates and explicit person/circle audiences. Defaults stay private; person/circle ownership is validated before changes commit. Reused the searchable person picker with a contextual label. The mobile add panel comes first. Reviewed migration `0012_personal_update_controls.sql` adds tombstones and hash-only receipts; test database only.
 - Removal clears saved text/date/audiences without claiming to remove original interview words. Replays cannot restore deleted updates; source correction can hard-remove the materialized row while receipts prevent resurrection. Origination-aware interview invalidation is shared with commitments; current reviewed summaries reflect edited/removed updates. No new cross-interview or outreach retrieval is enabled before source-dependency tracking.
@@ -182,3 +182,14 @@ Remote database connections require a valid certificate chain. Set `DATABASE_CA_
 - The previously pending integration run now passes all 43 tests, including pagination (3.7 seconds). Prior 24 unit tests, nine Chrome workflows, lint, production build and post-build typecheck remain valid for this unchanged application slice. The former approval blocker is resolved.
 - Existing Elastic Beanstalk deployment is a separate language-learning application; leave it untouched. There is no verified Network OS deployment. Local auth URL is localhost, the private-owner allowlist is absent, and the interview model is absent. Existing provider credential previously failed; no new private context was sent. Production hostname, owner identity, credit/cost coverage and deployment infrastructure still need resolution.
 - Next: commit the verified update library, scan and push the explicit branch, then prepare the isolated AWS deployment and identify exact remaining external configuration. Preserve Neon and all personal files.
+
+
+## AWS deployment preparation — verified locally, not deployed
+
+- Pushed `codex/network-os` through `1e8b33a` to origin. Reviewed 338 outgoing/staged blobs against configured secret values and private-path/private-key patterns; no findings after excluding API directories from the private-root pattern. This is a bounded scan, not proof that every possible secret pattern is covered. No unrelated local files were staged.
+- Added standalone Next output, a non-root multi-stage container, production worker dependency placement, exact GET/HEAD public health exemption, and immutable source packaging from a Git commit. Packaging refuses to overwrite existing files and excludes personal/uncommitted inputs; fixture tests verify these boundaries.
+- Added pinned CDK infrastructure: separate artifact bootstrap (private S3, ECR and bounded CodeBuild) and web/worker/HTTPS stack, one deployment architecture. Network tests verify no worker ingress, web ingress only from the load balancer, no NAT/RDS, secret references, build-role isolation and immutable images. No cloud resources were created. Docker is unavailable locally because its app executable is missing; cloud image build remains unexecuted.
+- Verification: all 26 application unit tests pass; the earlier 43 database tests pass; three CDK tests and infrastructure typecheck pass; lint, final production build and explicit post-build typecheck pass. The built standalone server passed synthetic localhost HTTP checks (health 200, private APIs 401, untrusted mutation 403), then stopped. No UI layout changed in this preparation slice. The container itself and cloud environment have not been tested.
+- Current Ohio Price List rates produce a $65–80/month planning estimate before credits, AI and the existing Neon bill. Credit coverage is unverified; owner budget, hostname and sign-in email questions are pending. See NETWORK_OS_DEPLOYMENT.md for assumptions, concrete stacks, callback settings and ordered build/deploy/rollback steps.
+- Fresh production dependency audit reports 27 advisories (12 high, 12 moderate, 3 low, no critical). Reachability review and applicable patches remain a deployment gate, alongside live-schema backup/restore/migration checks and legacy runtime-file/job durability. Do not claim production readiness from local checks.
+- Exact continuation: resolve the owner's hostname/sign-in/budget answers, finish security and production-data checks, inspect actual account inventory and synthesized diff, provision the artifact stack, build/scan the committed release, and deploy the reviewed service stack. Verify real HTTPS/auth/storage/worker behavior before reporting a live URL. Preserve Neon, the separate language app and personal files; no mentor mailbox fetch or messages.

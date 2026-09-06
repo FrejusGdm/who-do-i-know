@@ -13,6 +13,10 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  if (pathname === "/api/health" && ["GET", "HEAD"].includes(request.method)) {
+    return NextResponse.next();
+  }
+
   if (PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
     return NextResponse.next();
   }

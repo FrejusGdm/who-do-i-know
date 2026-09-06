@@ -1,0 +1,22 @@
+# Allow only application build inputs. Never send local notes, credentials or Git history.
+**
+!package.json
+!package-lock.json
+!next.config.mjs
+!tsconfig.json
+!postcss.config.mjs
+!tailwind.config.ts
+!.eslintrc.json
+!src/
+!src/**
+!scripts/
+!scripts/network-worker.ts
+!public/
+!public/assets/
+!public/assets/logo.png
+!public/assets/logo.svg
+!public/hero-ink-grid.svg
+!public/robots.txt
+!public/sample.csv
+!public/screenshot.png
+!Dockerfile

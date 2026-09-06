@@ -1,0 +1,14 @@
+{
+  "name": "network-os-infrastructure",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "synth": "cdk synth",
+    "diff": "cdk diff",
+    "deploy": "cdk deploy",
+    "test": "node --import tsx --test stack.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": { "aws-cdk-lib": "2.268.0", "constructs": "10.8.1" },
+  "devDependencies": { "aws-cdk": "2.1140.0", "tsx": "4.23.13", "typescript": "5.9.3", "@types/node": "^22.0.0" }
+}
