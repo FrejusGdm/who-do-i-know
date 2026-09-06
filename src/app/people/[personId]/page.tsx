@@ -15,6 +15,8 @@ import { ImportedContext } from "@/components/network/ImportedContext";
 import { NoteComposer } from "@/components/people/NoteComposer";
 import { OpenLoops } from "@/components/network/OpenLoops";
 import { personOpenLoops } from "@/lib/network/open-loops";
+import { personPreferences } from "@/lib/network/conversation-preferences";
+import { ConversationPreferences } from "@/components/network/ConversationPreferences";
 export const dynamic = "force-dynamic";
 export default async function PersonPage({
   params,
@@ -27,9 +29,10 @@ export default async function PersonPage({
     if (error instanceof NetworkError && error.status === 404) notFound();
     throw error;
   });
-  const [settings, loops] = await Promise.all([
+  const [settings, loops, preferences] = await Promise.all([
     ownerSettings(session.user.id),
     personOpenLoops(session.user.id, personId),
+    personPreferences(session.user.id, personId),
   ]);
   const today = todayInTimezone(settings.timezone);
   const { person, plan, interactions, notes, circles, facts } = data;
@@ -244,6 +247,12 @@ export default async function PersonPage({
             personId={personId}
             loops={loops}
             events={interactions}
+            archived={archived}
+          />
+          <ConversationPreferences
+            key={`${personId}-${preferences?.revision ?? 0}`}
+            personId={personId}
+            preferences={preferences}
             archived={archived}
           />
           {!archived && (

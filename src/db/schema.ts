@@ -1122,3 +1122,31 @@ export const openLoopRequests = pgTable('open_loop_requests', {
   uniqueIndex('open_loop_requests_owner_key_uidx').on(t.userId, t.requestKey),
   foreignKey({ columns: [t.personId, t.userId], foreignColumns: [people.id, people.userId] }).onDelete('cascade'),
 ]);
+
+export const conversationPreferences = pgTable('conversation_preferences', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  personId: uuid('person_id').notNull(),
+  intention: text('intention').notNull().default(''),
+  topics: text('topics').notNull().default(''),
+  preferredFormats: jsonb('preferred_formats').$type<string[]>().notNull().default([]),
+  language: text('language').notNull().default(''),
+  draftExclusions: text('draft_exclusions').notNull().default(''),
+  revision: integer('revision').notNull().default(1),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('conversation_preferences_owner_person_uidx').on(t.userId, t.personId),
+  foreignKey({ columns: [t.personId, t.userId], foreignColumns: [people.id, people.userId] }).onDelete('cascade'),
+]);
+
+export const conversationPreferenceRequests = pgTable('conversation_preference_requests', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  personId: uuid('person_id').notNull(),
+  requestKey: uuid('request_key').notNull(),
+  requestHash: text('request_hash').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('conversation_preference_requests_owner_key_uidx').on(t.userId, t.requestKey),
+  foreignKey({ columns: [t.personId, t.userId], foreignColumns: [people.id, people.userId] }).onDelete('cascade'),
+]);

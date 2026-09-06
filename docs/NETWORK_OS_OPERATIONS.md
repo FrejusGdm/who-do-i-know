@@ -76,3 +76,9 @@ Today includes open commitments due on or before seven calendar days from today 
 Migration `0010_open_loop_controls.sql` adds the optional interaction link and hash-only retry receipts. Apply through the normal reviewed migration process; build/start never migrates automatically. A retry reads the current commitment and cannot restore an older status. Source removal deletes linked promises before deleting an interaction; receipts survive to prevent replay from recreating them.
 
 Commitment changes invalidate unfinished work for related interviews. The original interview's reviewed-memory summary uses the commitment's current text, date and status. Broader commitment retrieval into other interviews or outreach drafts is deferred until generated outputs carry source dependencies that correction/removal can purge. Private commitment bodies are not added to other interviews' context in this slice.
+
+## Conversation preferences
+
+Person includes explicit relationship intention, natural topics, preferred formats/language and draft exclusions. Blank fields mean no preference, and clearing a field replaces its previous value. Saving never changes relationship type, met state, interaction history or cadence. Archived people retain read-only preferences.
+
+Migration `0011_conversation_preferences.sql` adds owner/person-scoped preferences and hash-only retry receipts. Concurrent saves serialize, stale revisions are rejected, and a replay returns current choices rather than restoring older text. The editor keeps uncertain saves in memory for retry; a stale tab can reload confirmed choices explicitly. These fields currently support the owner's manual planning. The optional drafting slice must apply exclusions and track this preference revision before using them; no new interview or outreach model consumer is enabled here.

@@ -78,6 +78,13 @@
       "when": 1788660260163,
       "tag": "0010_open_loop_controls",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1788662511444,
+      "tag": "0011_conversation_preferences",
+      "breakpoints": true
     }
   ]
 }

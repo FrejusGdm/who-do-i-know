@@ -934,3 +934,49 @@ test('removing a linked interaction invalidates the promise origin even without 
   // Other explicitly submitted recollections remain in their own interview.
   assert.equal((await getInterview(owner, second.interview.id)).turns[0].content, second.turn.content);
 });
+
+test('conversation preferences preserve explicit choices, isolate owners and reject stale saves without changing contact', async () => {
+  const { savePersonPreferences, personPreferences } = await import('../../src/lib/network/conversation-preferences');
+  const { conversationPreferences } = await import('../../src/db/schema');
+  const person = await createPerson(owner, { name: 'Preferences fixture', relationshipType: 'mentor' });
+  const foreign = await createPerson(stranger, { name: 'Other preferences fixture' });
+  const plan = await savePlan(owner, person.id, { nextDueOn: '2026-09-06' });
+  assert.equal(await personPreferences(owner, person.id), null);
+  const input = { requestKey: randomUUID(), revision: 0, intention: 'Keep a thoughtful mentorship', topics: 'Personal updates and AI safety questions', preferredFormats: ['photo', 'question'] as const, language: 'Français', draftExclusions: 'Private family details' };
+  const value = { ...input, preferredFormats: [...input.preferredFormats] };
+  const [saved, replay] = await Promise.all([savePersonPreferences(owner, person.id, value), savePersonPreferences(owner, person.id, { ...value, preferredFormats: ['question', 'photo'] })]);
+  assert.deepEqual(saved, replay); assert.equal(saved.revision, 1);
+  await assert.rejects(() => personPreferences(stranger, person.id), notFound);
+  await assert.rejects(() => savePersonPreferences(owner, foreign.id, value), notFound);
+  await assert.rejects(() => db.insert(conversationPreferences).values({ userId: owner, personId: foreign.id }));
+  const next = await savePersonPreferences(owner, person.id, { ...value, requestKey: randomUUID(), revision: 1, topics: 'A revised topic', language: '' });
+  assert.equal(next.language, ''); assert.equal(next.draftExclusions, value.draftExclusions);
+  assert.deepEqual(await savePersonPreferences(owner, person.id, value), next);
+  await assert.rejects(() => savePersonPreferences(owner, person.id, { ...value, requestKey: randomUUID() }), conflict);
+  await assert.rejects(() => savePersonPreferences(owner, person.id, { ...value, topics: 'Changed replay' }), conflict);
+  await assert.rejects(() => savePersonPreferences(owner, person.id, { ...value, requestKey: randomUUID(), revision: 2, preferredFormats: ['automatically_send'] } as never));
+  const [unchanged] = await db.select().from(people).where(eq(people.id, person.id));
+  assert.equal(unchanged.relationshipType, 'mentor'); assert.equal(unchanged.metState, person.metState);
+  assert.deepEqual((await db.select().from(keepInTouchPlans).where(eq(keepInTouchPlans.id, plan.id)))[0], plan);
+  const cleared = await savePersonPreferences(owner, person.id, { requestKey: randomUUID(), revision: 2, intention: '', topics: '', preferredFormats: [], language: '', draftExclusions: '' });
+  assert.equal(cleared.intention, ''); assert.deepEqual(cleared.preferredFormats, []);
+  await db.update(people).set({ archivedAt: new Date() }).where(eq(people.id, person.id));
+  assert.deepEqual(await personPreferences(owner, person.id), cleared);
+  await assert.rejects(() => savePersonPreferences(owner, person.id, { ...value, requestKey: randomUUID(), revision: 3 }), notFound);
+});
+
+test('a failed preference save cannot leave a partial new revision', async () => {
+  const { sql } = await import('drizzle-orm');
+  const { savePersonPreferences, personPreferences } = await import('../../src/lib/network/conversation-preferences');
+  const person = await createPerson(owner, { name: 'Preference rollback fixture' });
+  const input = { requestKey: randomUUID(), revision: 0, intention: 'Synthetic original intention', topics: '', preferredFormats: [], language: '', draftExclusions: '' };
+  const original = await savePersonPreferences(owner, person.id, input);
+  const requestKey = randomUUID();
+  await db.execute(sql.raw(`ALTER TABLE conversation_preference_requests ADD CONSTRAINT test_preferences_rollback CHECK (request_key <> '${requestKey}'::uuid)`));
+  try {
+    await assert.rejects(() => savePersonPreferences(owner, person.id, { ...input, requestKey, revision: 1, intention: 'Uncommitted intention' }));
+  } finally {
+    await db.execute(sql`ALTER TABLE conversation_preference_requests DROP CONSTRAINT test_preferences_rollback`);
+  }
+  assert.deepEqual(await personPreferences(owner, person.id), original);
+});
