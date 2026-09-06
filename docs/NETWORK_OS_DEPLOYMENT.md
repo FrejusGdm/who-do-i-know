@@ -1,6 +1,6 @@
 # Network OS deployment
 
-The application branch has been pushed through `e8d62e9`. On 2026-09-06 the owner authorized deployment using an AWS-provided HTTPS link, with a custom domain later. Both AWS stacks are created. The image build passed and service startup is underway at `https://d3p6ii3tjocl55.cloudfront.net`; live smoke checks are pending. The existing Elastic Beanstalk environment and certificate belong to another application and remain untouched.
+The application branch has been pushed through `104bddd`. On 2026-09-06 the owner authorized deployment using an AWS-provided HTTPS link, with a custom domain later. Both AWS stacks are created. The app is live at `https://d3p6ii3tjocl55.cloudfront.net`. HTTPS, private API rejection, worker startup and native database TLS checks passed. Final factual retention-copy update 104bddd is live and browser-verified; owner login remains locked. The existing Elastic Beanstalk environment and certificate belong to another application and remain untouched.
 
 ## First deployment and cost
 
@@ -74,3 +74,17 @@ The [zlib advisory](https://security-tracker.debian.org/tracker/CVE-2026-85091) 
 
 
 Final release image: `e8d62e9b009fb24898abe47ae9faa6b7c7a5a94d`, digest `sha256:2173ad5f3c89743d2f822167124d74d54b9772a075587ff2b57ede8b9b524bc7`. CodeBuild `a6f4ac85-e283-42c6-a8a0-cbecc03253a2` succeeded from source version `lQfdc.0OYANV30Wi.8V2i_IqBjBFsdB2`. ECR scan completed: 3 critical, 11 high, 5 medium; PCRE2 finding resolved, remaining exceptions assessed above. This is not a zero-vulnerability release. NetworkOs update changes only image task definitions and desired counts from zero to one. Google Cloud Console requires owner reauthentication; no callback edit has been made, and no owner identity was inferred from the signed-in browser.
+
+
+## Handoff status
+
+- Link: https://d3p6ii3tjocl55.cloudfront.net . No custom domain is needed. CloudFront distribution `E1O3QTS87ZGBCE` uses its default certificate and the internal ALB VPC origin. CloudFormation initially reached UPDATE_COMPLETE and the ALB target was healthy.
+- Verified live: homepage 200, health 200 with fixed JSON/no-store, unauthenticated private API 401, cross-origin mutation 403, disallowed health POST 403. Both web and worker reached one running task. A separate bounded AWS DB check exited zero with verified TLS and 13 migration records; it read no private relationship content.
+- Final copy-correction release `104bdddab1b054495bf0f362b0dd8d9615e682db`, digest `sha256:bb346891c11c0ee3447cb28f7985410127106989be8410d5d4fd3b5e29b06edc`, built successfully in run `4d378cb7-4f9e-4300-8531-ed965e2d9af0` from S3 version `rAmK9lzHGUaQRfjL8BIfV4eSMZwKcgWY`. Its OS scan matches the assessed 3 critical/11 high/5 medium findings; no clean-scan claim. It corrects misleading inherited retention/token-deletion text, including the unused email footer; no message sent.
+- Required owner actions: choose the one Google email to allow; reauthenticate in Google Cloud Console so the exact origin and callback above can be added to the existing OAuth client. Do not select an identity from the three database users or browser session without confirmation. No Google credential rotation or new OAuth client is required by this deployment.
+- AI configuration remains disabled after the earlier provider credential rejection. Mailbox connection/import is deferred until after the owner sees the deployment. Core app deployment is not completion of every PRD milestone or real owner authentication testing.
+
+
+Final live browser verification confirms corrected retention cards at desktop and 390px mobile widths. The obsolete zero-retention/no-account claims are absent. Homepage, privacy page and health return 200; private people API remains 401 without authentication. Both services have one running task and no pending tasks; CloudFormation finished UPDATE_COMPLETE. The release includes no unrelated local changes and no personal files were deleted outside the repository. Only its generated Next.js cache was cleared when local disk space ran out.
+
+Final status: `NetworkOs` reached `UPDATE_COMPLETE` after replacing both task definitions. Both ECS deployments completed. The default HTTPS deployment request is fulfilled; real owner sign-in, Google callback setup, AI configuration and the remaining PRD milestones remain open.

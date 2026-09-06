@@ -227,3 +227,23 @@ The corrected build `6b3d61c7-47b9-4209-97b8-c37c40b52169` succeeded for `0e1586
 Release e8d62e9 is running: one web task and one interview worker. HTTPS homepage and exact health route return 200; unauthenticated people API returns 401, untrusted POST and health POST return 403. A short-lived AWS task verified native PostgreSQL with authorized TLS and all 13 migration records; it logged only those checks. Original Neon remains unchanged.
 
 Live browser inspection caught inherited landing claims of zero retained data/no account and privacy claims of automatic OAuth-token deletion, inconsistent with persistent accounts and notes. Correct only those factual claims and the unused legacy download-email footer; no email is sent. Google console requires reauthentication, so callback remains unconfigured and private owner allowlist empty. Full private sign-in acceptance remains pending. Final OS scan for e8d62e9: 3 critical/11 high/5 medium, with documented upstream reachability exceptions in deployment notes.
+
+
+### Final deployment handoff preparation — 104bddd
+
+Image build 4d378cb7-4f9e-4300-8531-ed965e2d9af0 succeeded; digest sha256:bb346891c11c0ee3447cb28f7985410127106989be8410d5d4fd3b5e29b06edc. Lint/typecheck and explicit copy diff review passed. Final OS scan matches assessed exceptions (3 critical/11 high/5 medium). Rolling update submitted with only web/worker task-definition images changed. e8d62e9 initial deployment was UPDATE_COMPLETE with healthy ALB; prior live HTTP/security/DB checks passed. Final rollout reached healthy web and worker tasks; browser confirmation passed.
+
+Owner-only blockers remain: choose Google allowlist identity and reauthenticate in Google console for callback configuration. AI is disabled; no mailbox fetch or messages. Personal files and unrelated changes are preserved. No main merge. The existing app and original Neon database remain intact. Continue with exact final rollout/browser checks, then commit this status and hand over the URL with the login limitation; full M1–M6 goal remains unfinished.
+
+
+Final 104bddd live page and retention wording are verified in the browser at desktop and 390px mobile widths; prior misleading claims are absent. Homepage, privacy and health return 200, unauthenticated private API 401. Both services have one running task/no pending; web rollout completed and worker cleanup is finishing. Waiting for final CloudFormation completion before committing the handoff status. No further application changes or builds are needed for this deployment request.
+
+
+Both final ECS deployments now report COMPLETED at one running task each. The replacement worker stopped the prior task cleanly and reached steady state. Final CloudFormation status is still converging; no service failure was reported. The database smoke task exited zero. Production runtime never received the local .env file itself, private files, or a working AI credential. Only configured secret fields were supplied through Secrets Manager.
+
+
+## Deployment handoff — complete for the default HTTPS link
+
+NetworkOs CloudFormation reached UPDATE_COMPLETE after the final 104bddd rollout. Both ECS deployments report COMPLETED, one running task each. Live URL: https://d3p6ii3tjocl55.cloudfront.net . Default CloudFront HTTPS works without a purchased/custom domain. Release commit 104bddd is pushed; no main merge. Final build, live HTTP/auth boundary checks, native DB TLS/migration check and desktop/mobile inspection passed within the limitations above. Infrastructure and dependency scan exceptions remain documented, not silently waived or described as a clean scan.
+
+Exact next action after handoff: obtain the owner's chosen Google email; have the owner reauthenticate at the existing Google Cloud Console verification page; add the exact CloudFront JavaScript origin and /api/auth/callback/google redirect URI to the existing client, preserving all prior callbacks; set only that allowlist identity in the runtime secret and roll web tasks; verify real owner sign-in and non-owner denial. Then pursue the separately requested mailbox connection after the owner has seen the deployed app. AI remains disabled pending valid configuration. Do not infer an owner, fetch mail early, send messages, delete personal files, or mark M1–M6 complete.
