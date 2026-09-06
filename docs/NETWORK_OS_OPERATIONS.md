@@ -54,3 +54,15 @@ The existing thread, person and mentor-review processor now uses durable leases 
 The authenticated `/api/ai/process` endpoint processes at most six tasks per call and returns the remaining queue count. It validates the selected provider and requires a key for BYOK; malformed configuration does not silently select cloud processing. The existing internal importer may request a larger batch. These jobs are still driven by the legacy importer/API; the standalone `worker:network` command currently claims interview tasks only. Durable SQS delivery of the full import pipeline remains M6 work.
 
 Memory correction/deletion transactions must acquire the owner's `network_settings` row through `lockMemoryOwner` before canceling tasks, removing source records and invalidating summaries. Legacy and interview publication serialize against that same owner row. This ordering prevents a result from being published between source invalidation and transaction completion.
+
+## Correcting or removing a recollection
+
+Migration `0009_interview_corrections.sql` adds hash-only correction receipts and a contact-plan review flag. Apply it with the other reviewed migrations before serving the correction routes. It has only been applied to the disposable local database.
+
+Each saved user entry has a **Correct or remove** action. The preview includes later assistant replies and proposals, accepted narrative memories, person summaries and outreach text. Later AI replies are invalidated conservatively because they may repeat earlier context without quoting it. Accepting a proposal, changing a plan or editing a dependent record invalidates the preview. The owner must review a fresh preview and explicitly retain confirmed structural choices before proceeding.
+
+A correction replaces the source text; removal empties it and retains a content-free tombstone for retry safety. Both delete dependent proposal payloads/quotes, notes, facts, open loops, updates and interactions. Summaries for people linked to the interview are purged and outreach text cleared while mentor decisions remain. An affected plan pauses and shows a review notice on Today and the person's page; last contact is recomputed from remaining exact qualifying interactions. The prior due date is retained for review, not silently treated as valid contact evidence.
+
+The operation is atomic with cancellation and its retry receipt. Matching retries return the current interview without restoring old content. The shared owner lock serializes against legacy/interview publication; in-flight lease tokens remain until the old caller exits or its lease expires. Interview reads use a coherent database snapshot and omit deleted turns.
+
+This is entry-level correction/removal, not person or workspace deletion. Other user entries, unfinished drafts, imported records, confirmed identity/profile fields, met status, memberships and selected plan settings remain; the dialog discloses this scope and requires acknowledgment. Existing copies exported by the owner or retained in backups are not erased by this operation. Full export, person/workspace deletion and backup-retention operations remain M5/M6 work.

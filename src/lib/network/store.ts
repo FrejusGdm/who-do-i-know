@@ -121,7 +121,7 @@ export async function savePlan(userId: string, personId: string, raw: z.input<ty
     const fields = {
       intervalCount: input.intervalCount, intervalUnit: input.intervalUnit, timezone: input.timezone,
       preferredChannel: input.preferredChannel, nextDueOn: input.nextDueOn, anchorOn: input.nextDueOn,
-      lastContactOn: latest?.occurredOn ?? null, snoozedUntil: null, updatedAt: new Date(),
+      lastContactOn: latest?.occurredOn ?? null, snoozedUntil: null, needsReview: false, updatedAt: new Date(),
     };
     if (existing) {
       await cycleDecision(tx, existing, "canceled", null, "Plan changed by owner");
@@ -158,7 +158,7 @@ export async function actOnPlan(userId: string, personId: string, raw: z.input<t
     } else {
       await cycleDecision(tx, plan, "canceled", null, "Plan resumed with reviewed date");
       fields.cycleNumber = plan.cycleNumber + 1;
-      fields.status = "active"; fields.nextDueOn = input.nextDueOn; fields.anchorOn = input.nextDueOn; fields.snoozedUntil = null;
+      fields.needsReview = false; fields.status = "active"; fields.nextDueOn = input.nextDueOn; fields.anchorOn = input.nextDueOn; fields.snoozedUntil = null;
     }
     const [updated] = await tx.update(keepInTouchPlans).set(fields)
       .where(and(eq(keepInTouchPlans.id, plan.id), eq(keepInTouchPlans.userId, userId))).returning();

@@ -22,6 +22,7 @@ export default async function DashboardPage() {
     networkCircles(session.user.id),
   ]);
   const due = duePeople(planned);
+  const needsReview = planned.filter((person) => person.plan.needsReview);
   const greeting = session.user.name.split(" ")[0];
   const date = new Intl.DateTimeFormat("en", {
     weekday: "long",
@@ -121,6 +122,30 @@ export default async function DashboardPage() {
           )}
         </section>
         <aside className="space-y-6">
+          {!!needsReview.length && (
+            <section className="rounded-lg border border-[#deded5] bg-white p-6">
+              <h2 className="text-lg font-medium">
+                Check these reminder dates
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-[#62685e]">
+                A recollection changed. These reminders are paused until you
+                review the plan.
+              </p>
+              <ul className="mt-3">
+                {needsReview.map((person) => (
+                  <li key={person.id}>
+                    <Link
+                      className="inline-flex min-h-11 items-center text-[#43664F] underline"
+                      href={`/people/${person.id}#contact-plan`}
+                    >
+                      {person.name}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           <section className="rounded-lg border border-[#deded5] bg-[#efeee5] p-6">
             <p className="text-sm text-[#62685e]">A thought before you write</p>
             <h2 className="mt-3 font-serif text-3xl text-balance">

@@ -928,6 +928,7 @@ export const keepInTouchPlans = pgTable("keep_in_touch_plans", {
   anchorOn: date("anchor_on").notNull(),
   nextDueOn: date("next_due_on").notNull(),
   lastContactOn: date("last_contact_on"),
+  needsReview: boolean("needs_review").notNull().default(false),
   snoozedUntil: date("snoozed_until"),
   cycleNumber: integer("cycle_number").notNull().default(1),
   revision: integer("revision").notNull().default(1),
@@ -1010,6 +1011,22 @@ export const interviewTurns = pgTable('interview_turns', {
   uniqueIndex('interview_turns_ordinal_uidx').on(t.interviewId, t.ordinal),
   foreignKey({ columns: [t.interviewId, t.userId], foreignColumns: [interviews.id, interviews.userId] }).onDelete('cascade'),
   check('interview_turns_role_check', sql`${t.role} in ('user', 'assistant')`),
+]);
+
+// Retry receipts contain only operation hashes, never previous recollection text.
+export const interviewCorrections = pgTable('interview_corrections', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  interviewId: uuid('interview_id').notNull(),
+  turnId: uuid('turn_id').notNull(),
+  requestKey: uuid('request_key').notNull(),
+  requestHash: text('request_hash').notNull(),
+  action: text('action').$type<'correct' | 'remove'>().notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('interview_corrections_owner_request_uidx').on(t.userId, t.requestKey),
+  foreignKey({ columns: [t.interviewId, t.userId], foreignColumns: [interviews.id, interviews.userId] }).onDelete('cascade'),
+  foreignKey({ columns: [t.turnId, t.userId], foreignColumns: [interviewTurns.id, interviewTurns.userId] }).onDelete('cascade'),
 ]);
 
 export const memoryProposals = pgTable('memory_proposals', {

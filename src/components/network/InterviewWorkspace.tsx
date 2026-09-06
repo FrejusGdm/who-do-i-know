@@ -13,6 +13,7 @@ import type {
 } from "@/lib/network/interview-jobs";
 import { useInterviewAI } from "./useInterviewAI";
 import { InterviewAIControls } from "./InterviewAIControls";
+import { CorrectRecollection } from "./CorrectRecollection";
 import { useInterviewDraft } from "./useInterviewDraft";
 type InterviewState = Pick<
   typeof interviews.$inferSelect,
@@ -187,7 +188,11 @@ export function InterviewWorkspace({
           aria-label="Saved conversation"
         >
           <div>
-            <h2 className="text-balance text-xl font-medium">
+            <h2
+              id="recollection-list-heading"
+              tabIndex={-1}
+              className="text-balance text-xl font-medium"
+            >
               Room to remember
             </h2>
             <p className="mt-2 text-pretty leading-7 text-[#62685e]">
@@ -228,6 +233,14 @@ export function InterviewWorkspace({
                 <p className="whitespace-pre-wrap break-words text-pretty leading-7">
                   {turn.content}
                 </p>
+                {turn.role === "user" && (
+                  <CorrectRecollection
+                    interviewId={interview.id}
+                    turnId={turn.id}
+                    disabled={submitting || statusMutation.pending}
+                    onSaved={receiveSnapshot}
+                  />
+                )}
               </li>
             ))}
           </ol>

@@ -647,3 +647,158 @@ test('legacy thread and mentor writers preserve downstream work and isolate cros
     assert.equal((await db.select().from(outreachTasks).where(and(eq(outreachTasks.userId, owner), eq(outreachTasks.personId, person.id)))).length, 1);
   } finally { globalThis.fetch = originalFetch; }
 });
+
+test('removing a recollection purges all dependent narrative types, retains reviewed choices, and pauses affected plans', async () => {
+  const { publishInterviewGeneration, reviewMemoryProposal, getInterview, appendInterviewTurn, saveInterviewDraft } = await import('../../src/lib/network/interviews');
+  const { previewInterviewCorrection, correctInterviewTurn } = await import('../../src/lib/network/interview-corrections');
+  const { notes, confirmedFacts, openLoops, personalUpdates, aiPersonSummaries, outreachTasks, interviewTurns, interviewCorrections } = await import('../../src/db/schema');
+  const { networkPeople } = await import('../../src/lib/network/queries');
+  const person = await createPerson(owner, { name: 'Correction subject', relationshipType: 'mentor' });
+  const circle = await createCircle(owner, { name: `Correction circle ${randomUUID()}` });
+  const fixture = await interviewFixture([person.id], 'A synthetic cobalt-needle recollection. We spoke on September 5.');
+  const { interview, source, turn } = fixture;
+  await recordInteraction(owner, { requestKey: randomUUID(), personIds: [person.id], body: 'Independent earlier contact', channel: 'call', datePrecision: 'day', occurredOn: '2026-06-01', qualifiesForCadence: true });
+  const generation = { generationKey: randomUUID(), sourceRevision: interview.revision, assistant: 'A synthetic cobalt-needle reply.', proposals: [
+    { payload: { kind: 'new_person' as const, values: { name: 'Retained confirmed identity' } }, sources: [source] },
+    { payload: { kind: 'note' as const, personId: person.id, body: 'cobalt-needle note' }, sources: [source] },
+    { payload: { kind: 'profile_fact' as const, personId: person.id, label: 'Interest', body: 'cobalt-needle fact' }, sources: [source] },
+    { payload: { kind: 'plan' as const, personId: person.id, values: { nextDueOn: '2026-12-05' } }, sources: [source] },
+    { payload: { kind: 'circle_membership' as const, personId: person.id, circleId: circle.id }, sources: [source] },
+    { payload: { kind: 'open_loop' as const, personId: person.id, body: 'cobalt-needle loop' }, sources: [source] },
+    { payload: { kind: 'personal_update' as const, title: 'Synthetic update', body: 'cobalt-needle update' }, sources: [source] },
+    { payload: { kind: 'interaction' as const, values: { requestKey: randomUUID(), personIds: [person.id], body: 'cobalt-needle interaction', channel: 'call' as const, direction: 'mutual' as const, datePrecision: 'day' as const, occurredOn: '2026-09-05', qualifiesForCadence: true } }, sources: [source] },
+  ] };
+  const generated = await publishInterviewGeneration(owner, interview.id, generation);
+  for (const proposal of generated.proposals) await reviewMemoryProposal(owner, interview.id, proposal.id, { action: 'accept', revision: 1 });
+  const before = await getInterview(owner, interview.id);
+  const later = await appendInterviewTurn(owner, interview.id, { requestKey: randomUUID(), revision: before.interview.revision, content: 'Independent later recollection' });
+  const laterSource = { turnId: later.turn.id, revision: 1, start: 0, end: later.turn.content.length, quote: later.turn.content };
+  // A later answer can repeat old information even if its displayed quote cites only the new entry.
+  await publishInterviewGeneration(owner, interview.id, { generationKey: randomUUID(), sourceRevision: later.interview.revision, assistant: 'Later cobalt-needle answer', proposals: [{ payload: { kind: 'note', personId: person.id, body: 'Later cobalt-needle inference' }, sources: [laterSource] }] });
+  await saveInterviewDraft(owner, interview.id, { requestKey: randomUUID(), revision: 1, content: 'Independent unfinished draft' });
+  await db.insert(aiPersonSummaries).values({ personId: person.id, summary: 'cobalt-needle summary', model: 'fixture' });
+  await db.insert(outreachTasks).values({ userId: owner, personId: person.id, status: 'confirmed', reason: 'cobalt-needle reason', draftMessage: 'cobalt-needle draft' });
+  const preview = await previewInterviewCorrection(owner, interview.id, turn.id);
+  assert.deepEqual(preview.counts, { assistantTurns: 2, proposals: 9, notes: 1, facts: 1, interactions: 1, openLoops: 1, updates: 1, summaries: 1, outreach: 1 });
+  assert.deepEqual(preview.retained, { people: 1, memberships: 1, plans: 1 });
+  assert.equal(preview.plansToReview[0].lastContactOn, '2026-06-01');
+  const input = { requestKey: randomUUID(), impactKey: preview.impactKey, action: 'remove' as const, retainConfirmedChoices: true as const };
+  await Promise.all([correctInterviewTurn(owner, interview.id, turn.id, input), correctInterviewTurn(owner, interview.id, turn.id, input)]);
+  const current = await getInterview(owner, interview.id);
+  assert.deepEqual(current.turns.map((row) => row.id), [later.turn.id]);
+  assert.equal(current.proposals.length, 0);
+  assert.equal(current.interview.draftContent, 'Independent unfinished draft');
+  const stored = await db.select().from(interviewTurns).where(eq(interviewTurns.interviewId, interview.id));
+  assert.equal(JSON.stringify(stored).includes('cobalt-needle'), false);
+  assert.ok(stored.find((row) => row.id === turn.id)?.deletedAt);
+  for (const table of [notes, confirmedFacts, openLoops]) assert.equal((await db.select().from(table).where(eq(table.personId, person.id))).length, 0);
+  assert.equal((await db.select().from(personalUpdates).where(eq(personalUpdates.proposalId, generated.proposals[6].id))).length, 0);
+  assert.equal((await db.select().from(aiPersonSummaries).where(eq(aiPersonSummaries.personId, person.id))).length, 0);
+  const [outreach] = await db.select().from(outreachTasks).where(eq(outreachTasks.personId, person.id));
+  assert.equal(outreach.status, 'confirmed'); assert.equal(outreach.draftMessage, null); assert.equal(outreach.reason.includes('cobalt-needle'), false);
+  assert.equal((await networkPeople(owner, { q: 'cobalt-needle' })).people.length, 0);
+  assert.equal((await db.select().from(circleMembers).where(eq(circleMembers.circleId, circle.id))).length, 1);
+  assert.ok((await db.select().from(people).where(eq(people.id, person.id)))[0]);
+  const [plan] = await db.select().from(keepInTouchPlans).where(eq(keepInTouchPlans.personId, person.id));
+  assert.equal(plan.lastContactOn, '2026-06-01'); assert.equal(plan.status, 'paused'); assert.equal(plan.needsReview, true);
+  assert.equal((await db.select().from(checkIns).where(eq(checkIns.planId, plan.id))).some((row) => row.interactionId !== null), false);
+  const resumed = await actOnPlan(owner, person.id, { revision: plan.revision, action: 'resume', nextDueOn: '2026-10-01' });
+  assert.equal(resumed.needsReview, false); assert.equal(resumed.lastContactOn, '2026-06-01');
+  assert.equal((await db.select().from(interviewCorrections).where(eq(interviewCorrections.interviewId, interview.id))).length, 1);
+  await assert.rejects(() => publishInterviewGeneration(owner, interview.id, generation), conflict);
+  await assert.rejects(() => appendInterviewTurn(owner, interview.id, { requestKey: turn.requestKey, revision: current.interview.revision, content: turn.content }), conflict);
+  await assert.rejects(() => reviewMemoryProposal(owner, interview.id, generated.proposals[1].id, { action: 'accept', revision: 1 }), notFound);
+});
+
+test('correction requires a current impact preview, exact owner, and retention consent; replay cannot undo a newer edit', async () => {
+  const { publishInterviewGeneration, reviewMemoryProposal, getInterview, appendInterviewTurn } = await import('../../src/lib/network/interviews');
+  const { correctInterviewTurn, previewInterviewCorrection } = await import('../../src/lib/network/interview-corrections');
+  const person = await createPerson(owner, { name: 'Correction revision fixture' });
+  const { interview, turn, source } = await interviewFixture([person.id], 'Synthetic outdated source');
+  const generated = await publishInterviewGeneration(owner, interview.id, { generationKey: randomUUID(), sourceRevision: interview.revision, assistant: 'Synthetic question', proposals: [{ payload: { kind: 'note', personId: person.id, body: 'Synthetic note' }, sources: [source] }] });
+  const preview = await previewInterviewCorrection(owner, interview.id, turn.id);
+  const input = { requestKey: randomUUID(), impactKey: preview.impactKey, action: 'correct' as const, content: 'Synthetic corrected source', retainConfirmedChoices: true as const };
+  await assert.rejects(() => previewInterviewCorrection(stranger, interview.id, turn.id), notFound);
+  await assert.rejects(() => correctInterviewTurn(stranger, interview.id, turn.id, input), notFound);
+  await assert.rejects(() => previewInterviewCorrection(owner, interview.id, randomUUID()), notFound);
+  await assert.rejects(() => previewInterviewCorrection(owner, interview.id, generated.assistant.id), notFound);
+  await assert.rejects(() => correctInterviewTurn(owner, interview.id, turn.id, { ...input, retainConfirmedChoices: false } as never));
+  await reviewMemoryProposal(owner, interview.id, generated.proposals[0].id, { action: 'accept', revision: 1 });
+  // Accepting a memory does not change the interview revision, but must invalidate the preview.
+  await assert.rejects(() => correctInterviewTurn(owner, interview.id, turn.id, input), conflict);
+  assert.equal((await getInterview(owner, interview.id)).turns[0].content, turn.content);
+  const fresh = await previewInterviewCorrection(owner, interview.id, turn.id);
+  const corrected = { ...input, impactKey: fresh.impactKey };
+  await correctInterviewTurn(owner, interview.id, turn.id, corrected);
+  const second = await previewInterviewCorrection(owner, interview.id, turn.id);
+  await correctInterviewTurn(owner, interview.id, turn.id, { ...corrected, requestKey: randomUUID(), impactKey: second.impactKey, content: 'Second synthetic correction' });
+  await correctInterviewTurn(owner, interview.id, turn.id, corrected);
+  assert.equal((await getInterview(owner, interview.id)).turns[0].content, 'Second synthetic correction');
+  await assert.rejects(() => correctInterviewTurn(owner, interview.id, turn.id, { ...corrected, content: 'Different replay' }), conflict);
+  await assert.rejects(() => appendInterviewTurn(owner, interview.id, { requestKey: turn.requestKey, revision: 1, content: turn.content }), conflict);
+  // Correction/removal remains available for archived participants.
+  await db.update(people).set({ archivedAt: new Date(), reviewStatus: 'archived' }).where(eq(people.id, person.id));
+  const archived = await previewInterviewCorrection(owner, interview.id, turn.id);
+  await correctInterviewTurn(owner, interview.id, turn.id, { requestKey: randomUUID(), impactKey: archived.impactKey, action: 'remove', retainConfirmedChoices: true });
+  assert.equal((await getInterview(owner, interview.id)).turns.length, 0);
+});
+
+test('source correction cancels in-flight interview and legacy output and excludes removed text from the next model context', async () => {
+  const { correctInterviewTurn, previewInterviewCorrection } = await import('../../src/lib/network/interview-corrections');
+  const { getInterview } = await import('../../src/lib/network/interviews');
+  const { aiProcessingTasks, networkAiUsage, aiPersonSummaries } = await import('../../src/db/schema');
+  const { queueInterview, claimInterviewJob, interviewJobContext, finishInterviewJob } = await import('../../src/lib/network/interview-jobs');
+  const { claimLegacyJob, publishLegacyJob } = await import('../../src/lib/network/legacy-ai-jobs');
+  const { enqueueAITask } = await import('../../src/lib/ai-task-processor');
+  await db.delete(aiProcessingTasks).where(eq(aiProcessingTasks.userId, owner));
+  await db.delete(networkAiUsage).where(eq(networkAiUsage.userId, owner));
+  process.env.PRIVATE_USER_EMAILS = `${owner}@example.test`;
+  await enableInterviewAI();
+  const person = await createPerson(owner, { name: 'Cancellation correction fixture' });
+  const { interview, turn } = await interviewFixture([person.id], 'Synthetic vanishing-needle source');
+  await queueInterview(owner, interview.id, { requestKey: randomUUID(), revision: interview.revision });
+  const job = await claimInterviewJob(owner); assert.ok(job);
+  assert.ok(JSON.stringify(await interviewJobContext(job)).includes('vanishing-needle'));
+  await enqueueAITask({ userId: owner, taskType: 'person_summarizer', targetType: 'person', targetId: person.id });
+  const legacy = await claimLegacyJob(owner, 'fixture'); assert.ok(legacy);
+  const preview = await previewInterviewCorrection(owner, interview.id, turn.id);
+  await correctInterviewTurn(owner, interview.id, turn.id, { requestKey: randomUUID(), impactKey: preview.impactKey, action: 'correct', content: 'Current safe fixture text', retainConfirmedChoices: true });
+  assert.equal(await finishInterviewJob(job, await fixtureReply()), false);
+  assert.equal(await publishLegacyJob(legacy, async (tx) => { await tx.insert(aiPersonSummaries).values({ personId: person.id, summary: 'vanishing-needle', model: 'fixture' }); }), false);
+  assert.equal((await db.select().from(aiPersonSummaries).where(eq(aiPersonSummaries.personId, person.id))).length, 0);
+  const current = await getInterview(owner, interview.id);
+  await queueInterview(owner, interview.id, { requestKey: randomUUID(), revision: current.interview.revision });
+  const fresh = await claimInterviewJob(owner); assert.ok(fresh);
+  const context = await interviewJobContext(fresh);
+  assert.equal(JSON.stringify(context).includes('vanishing-needle'), false);
+  assert.ok(JSON.stringify(context).includes('Current safe fixture text'));
+  await finishInterviewJob(fresh, await fixtureReply());
+});
+
+test('a failed correction rolls back source removal, memories, summaries and contact-plan changes together', async () => {
+  const { sql } = await import('drizzle-orm');
+  const { correctInterviewTurn, previewInterviewCorrection } = await import('../../src/lib/network/interview-corrections');
+  const { publishInterviewGeneration, reviewMemoryProposal, getInterview } = await import('../../src/lib/network/interviews');
+  const { notes, aiPersonSummaries } = await import('../../src/db/schema');
+  const person = await createPerson(owner, { name: 'Rollback correction fixture' });
+  const { interview, turn, source } = await interviewFixture([person.id], 'Synthetic rollback recollection');
+  const generated = await publishInterviewGeneration(owner, interview.id, { generationKey: randomUUID(), sourceRevision: interview.revision, assistant: 'Synthetic rollback question', proposals: [{ payload: { kind: 'note', personId: person.id, body: 'Synthetic rollback note' }, sources: [source] }, { payload: { kind: 'plan', personId: person.id, values: { nextDueOn: '2026-10-01' } }, sources: [source] }] });
+  for (const proposal of generated.proposals) await reviewMemoryProposal(owner, interview.id, proposal.id, { action: 'accept', revision: 1 });
+  await db.insert(aiPersonSummaries).values({ personId: person.id, summary: 'Synthetic rollback summary', model: 'fixture' });
+  const preview = await previewInterviewCorrection(owner, interview.id, turn.id);
+  const requestKey = randomUUID();
+  // Test-only constraint targets this operation; the final receipt write fails after the purge work.
+  await db.execute(sql.raw(`ALTER TABLE interview_corrections ADD CONSTRAINT test_correction_rollback CHECK (request_key <> '${requestKey}'::uuid)`));
+  try {
+    await assert.rejects(() => correctInterviewTurn(owner, interview.id, turn.id, { requestKey, impactKey: preview.impactKey, action: 'remove', retainConfirmedChoices: true }));
+  } finally {
+    await db.execute(sql`ALTER TABLE interview_corrections DROP CONSTRAINT test_correction_rollback`);
+  }
+  const current = await getInterview(owner, interview.id);
+  assert.equal(current.turns.length, 2); assert.equal(current.turns[0].content, turn.content); assert.equal(current.proposals.length, 2);
+  assert.equal((await db.select().from(notes).where(eq(notes.personId, person.id))).length, 1);
+  assert.equal((await db.select().from(aiPersonSummaries).where(eq(aiPersonSummaries.personId, person.id))).length, 1);
+  const [plan] = await db.select().from(keepInTouchPlans).where(eq(keepInTouchPlans.personId, person.id));
+  assert.equal(plan.needsReview, false); assert.equal(plan.status, 'active');
+  assert.equal((await previewInterviewCorrection(owner, interview.id, turn.id)).impactKey, preview.impactKey);
+});

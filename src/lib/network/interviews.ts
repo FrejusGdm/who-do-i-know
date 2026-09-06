@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
 import {
@@ -165,51 +165,58 @@ export async function saveInterviewDraft(
 export async function getInterview(userId: string, id: string) {
   if (!z.string().uuid().safeParse(id).success)
     throw new NetworkError(404, "Interview not found");
-  const [interview] = await db
-    .select()
-    .from(interviews)
-    .where(and(eq(interviews.id, id), eq(interviews.userId, userId)));
-  if (!interview) throw new NetworkError(404, "Interview not found");
-  const [turns, proposals, participants] = await Promise.all([
-    db
-      .select()
-      .from(interviewTurns)
-      .where(
-        and(
-          eq(interviewTurns.interviewId, id),
-          eq(interviewTurns.userId, userId),
-        ),
-      )
-      .orderBy(asc(interviewTurns.ordinal)),
-    db
-      .select()
-      .from(memoryProposals)
-      .where(
-        and(
-          eq(memoryProposals.interviewId, id),
-          eq(memoryProposals.userId, userId),
-        ),
-      )
-      .orderBy(asc(memoryProposals.createdAt), asc(memoryProposals.ordinal)),
-    db
-      .select({
-        id: people.id,
-        name: people.name,
-        archivedAt: people.archivedAt,
-      })
-      .from(interviewPeople)
-      .innerJoin(
-        people,
-        and(eq(people.id, interviewPeople.personId), eq(people.userId, userId)),
-      )
-      .where(
-        and(
-          eq(interviewPeople.interviewId, id),
-          eq(interviewPeople.userId, userId),
-        ),
-      ),
-  ]);
-  return { interview, turns, proposals, participants };
+  return db.transaction(
+    async (tx) => {
+      const [interview] = await tx
+        .select()
+        .from(interviews)
+        .where(and(eq(interviews.id, id), eq(interviews.userId, userId)));
+      if (!interview) throw new NetworkError(404, "Interview not found");
+      const turns = await tx
+        .select()
+        .from(interviewTurns)
+        .where(
+          and(
+            eq(interviewTurns.interviewId, id),
+            eq(interviewTurns.userId, userId),
+            isNull(interviewTurns.deletedAt),
+          ),
+        )
+        .orderBy(asc(interviewTurns.ordinal));
+      const proposals = await tx
+        .select()
+        .from(memoryProposals)
+        .where(
+          and(
+            eq(memoryProposals.interviewId, id),
+            eq(memoryProposals.userId, userId),
+          ),
+        )
+        .orderBy(asc(memoryProposals.createdAt), asc(memoryProposals.ordinal));
+      const participants = await tx
+        .select({
+          id: people.id,
+          name: people.name,
+          archivedAt: people.archivedAt,
+        })
+        .from(interviewPeople)
+        .innerJoin(
+          people,
+          and(
+            eq(people.id, interviewPeople.personId),
+            eq(people.userId, userId),
+          ),
+        )
+        .where(
+          and(
+            eq(interviewPeople.interviewId, id),
+            eq(interviewPeople.userId, userId),
+          ),
+        );
+      return { interview, turns, proposals, participants };
+    },
+    { isolationLevel: "repeatable read", accessMode: "read only" },
+  );
 }
 
 export async function appendInterviewTurn(
@@ -406,7 +413,11 @@ export async function publishInterviewGeneration(
         ),
       );
     if (existing) {
-      if (existing.role !== "assistant" || existing.requestHash !== hash)
+      if (
+        existing.role !== "assistant" ||
+        existing.deletedAt ||
+        existing.requestHash !== hash
+      )
         throw new NetworkError(
           409,
           "The generation key was already used for a different result",

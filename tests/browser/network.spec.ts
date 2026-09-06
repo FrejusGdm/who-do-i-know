@@ -549,3 +549,79 @@ test('legacy processing rejects unsafe inputs before invoking any model', async 
   expect((await context.request.post('/api/ai/process', { headers: { origin: 'https://untrusted.example' }, data: {} })).status()).toBe(403);
   expect((await context.request.post('/api/ai/process', { headers: { origin }, data: { byokApiKey: 'x'.repeat(70_000) } })).status()).toBe(413);
 });
+
+test('recollection corrections preview effects, recover lost acknowledgments, and remove memories with an accessible confirmation', async ({ page }) => {
+  page.setDefaultTimeout(30_000);
+  const { appendInterviewTurn, reviewMemoryProposal } = await import('../../src/lib/network/interviews');
+  const { savePlan } = await import('../../src/lib/network/store');
+  const person = await createPerson(owner, { name: 'Recollection correction fixture' });
+  await savePlan(owner, person.id, { nextDueOn: '2026-09-05' });
+  const interview = await createInterview(owner, { requestKey: randomUUID(), title: 'Correction browser fixture', personIds: [person.id] });
+  const saved = await appendInterviewTurn(owner, interview.id, { requestKey: randomUUID(), revision: interview.revision, content: 'Synthetic outdated memory about a call on September 5.' });
+  const generation = await publishInterviewGeneration(owner, interview.id, {
+    generationKey: randomUUID(), sourceRevision: saved.interview.revision, assistant: 'Synthetic follow-up question.',
+    proposals: [{ payload: { kind: 'interaction', values: { requestKey: randomUUID(), personIds: [person.id], body: 'Synthetic outdated call', channel: 'call', datePrecision: 'day', occurredOn: '2026-09-05', qualifiesForCadence: true } }, sources: [{ turnId: saved.turn.id, revision: 1, start: 0, end: saved.turn.content.length, quote: saved.turn.content }] }],
+  });
+  await reviewMemoryProposal(owner, interview.id, generation.proposals[0].id, { action: 'accept', revision: 1 });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`/interviews/${interview.id}`);
+  await page.getByRole('button', { name: 'Correct or remove', exact: true }).click();
+  const dialog = page.getByRole('alertdialog', { name: 'Review this recollection' });
+  await expect(dialog.getByText('What this changes', { exact: true })).toBeVisible();
+  await expect(dialog.getByText('1 AI reply and 1 suggestion removed.', { exact: true })).toBeVisible();
+  await expect(dialog.getByText(/remaining last contact: unknown/)).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Save correction', exact: true })).toBeDisabled();
+  await page.keyboard.press('Tab');
+  expect(await dialog.evaluate((element) => element.contains(document.activeElement))).toBe(true);
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Correct or remove', exact: true })).toBeFocused();
+  await expect(page.getByRole('region', { name: 'Saved conversation', exact: true }).getByText(saved.turn.content, { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Correct or remove', exact: true }).click();
+  await expect(dialog.getByText('What this changes', { exact: true })).toBeVisible();
+  await dialog.getByLabel('Corrected recollection', { exact: true }).fill('Synthetic corrected memory: the date is uncertain.');
+  await dialog.getByRole('checkbox').check();
+  await expect(dialog.getByRole('button', { name: 'Save correction', exact: true })).toBeInViewport();
+  await page.screenshot({ path: '/private/tmp/network-os-correction-desktop.png', fullPage: false });
+  const url = `**/api/interviews/${interview.id}/turns/${saved.turn.id}`;
+  let lost = false;
+  await page.route(url, async (route) => {
+    if (route.request().method() === 'PATCH' && !lost) { lost = true; await route.fetch(); await route.abort(); }
+    else await route.continue();
+  });
+  await dialog.getByRole('button', { name: 'Save correction', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toContainText('Connection interrupted');
+  await expect(dialog.getByLabel('Corrected recollection', { exact: true })).toHaveValue('Synthetic corrected memory: the date is uncertain.');
+  await dialog.getByRole('button', { name: 'Save correction', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await page.unroute(url);
+  await expect(page.getByText('Synthetic corrected memory: the date is uncertain.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Synthetic follow-up question.', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Room to remember', exact: true })).toBeFocused();
+  await page.reload();
+  await expect(page.getByText('Synthetic corrected memory: the date is uncertain.', { exact: true })).toBeVisible();
+  await page.goto('/dashboard');
+  await expect(page.getByRole('heading', { name: 'Check these reminder dates', exact: true })).toBeVisible();
+  await page.getByRole('link', { name: person.name, exact: true }).click();
+  await expect(page.getByText(/A source recollection changed\. Review the remaining contact history/)).toBeVisible();
+  await page.goto(`/interviews/${interview.id}`);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: 'Correct or remove', exact: true }).click();
+  await expect(dialog.getByText('What this changes', { exact: true })).toBeVisible();
+  await dialog.getByLabel('Change to make', { exact: true }).selectOption('remove');
+  await dialog.getByRole('checkbox').check();
+  await expect(dialog.getByRole('button', { name: 'Remove entry and memories', exact: true })).toBeInViewport();
+  await page.screenshot({ path: '/private/tmp/network-os-correction-mobile.png', fullPage: false });
+  expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await dialog.getByRole('button', { name: 'Remove entry and memories', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Correct or remove', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Room to remember', exact: true })).toBeFocused();
+  await page.reload();
+  expect((await getInterview(owner, interview.id)).turns).toHaveLength(0);
+  const target = `/api/interviews/${interview.id}/turns/${saved.turn.id}`;
+  const missing = await page.request.get(target); expect(missing.status()).toBe(404);
+  const noOrigin = await page.request.patch(target, { data: {} }); expect(noOrigin.status()).toBe(403);
+  const foreign = await page.request.get(`/api/interviews/${foreignId}/turns/${saved.turn.id}`); expect(foreign.status()).toBe(404);
+  const invalid = await page.request.patch(target, { headers: { Origin: origin }, data: { action: 'remove' } }); expect(invalid.status()).toBe(400);
+  const oversized = await page.request.patch(target, { headers: { Origin: origin }, data: { content: 'x'.repeat(70_000) } }); expect(oversized.status()).toBe(413);
+});

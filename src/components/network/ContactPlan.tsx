@@ -31,6 +31,16 @@ export function ContactPlan({
           ? `Last qualifying contact: ${plan.lastContactOn ?? "unknown"}. ${plan.status === "paused" ? "Reminders are paused." : plan.snoozedUntil ? `Snoozed to ${plan.snoozedUntil}.` : `Next check-in: ${plan.nextDueOn}.`}`
           : "No reminders yet. Choose when you’d like to check in first."}
       </p>
+      {plan?.needsReview && (
+        <p
+          role="status"
+          className="mt-4 rounded-lg border border-[#deded5] bg-[#efeee5] p-4 text-sm leading-6"
+        >
+          A source recollection changed. Review the remaining contact history
+          and choose a check-in date before resuming reminders. Saving the
+          rhythm confirms the settings; reminders stay paused until you resume.
+        </p>
+      )}
       <form
         key={plan?.revision ?? "new"}
         className="mt-5 space-y-4"
