@@ -969,6 +969,9 @@ export const interviews = pgTable('interviews', {
   mode: text('mode').notNull(),
   status: text('status').$type<'active' | 'paused' | 'reviewing' | 'completed' | 'discarded'>().notNull().default('active'),
   revision: integer('revision').notNull().default(1),
+  draftContent: text('draft_content').notNull().default(''),
+  draftRevision: integer('draft_revision').notNull().default(1),
+  draftRequestKey: uuid('draft_request_key'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [

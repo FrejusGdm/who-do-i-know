@@ -34,6 +34,14 @@ export const appendTurnInput = z
     requestKey: z.string().uuid(),
     revision: z.number().int().positive(),
     content: z.string().trim().min(1).max(12000),
+    draftRevision: z.number().int().positive().optional(),
+  })
+  .strict();
+export const interviewDraftInput = z
+  .object({
+    requestKey: z.string().uuid(),
+    revision: z.number().int().positive(),
+    content: z.string().max(12000),
   })
   .strict();
 export const interviewStatusInput = z

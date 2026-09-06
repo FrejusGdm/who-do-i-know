@@ -19,7 +19,7 @@ Implement the full Network OS PRD through M1–M6, including secure private work
 | --- | --- | --- |
 | M0: baseline and design | In progress | Repo and objective inspected; branch created; initial security patches committed; remaining dependency assessment before deployment |
 | M1: people, circles, interactions, cadence | In progress | Storage, owner-scoped routes and working People/Circles/Person/Today UI implemented; 17 unit tests, 8 PostgreSQL tests and full desktop/mobile browser flow passed; production build, type checking and lint passed |
-| M2: interviews and reviewed memory | In progress | Storage, authenticated API, capture/review UI and profile source links implemented; browser and database checks pass. Configured provider boundary and durable local worker implemented; live-provider verification, autosave, source correction and deletion remain |
+| M2: interviews and reviewed memory | In progress | Storage, authenticated API, capture/review UI and profile source links implemented; browser and database checks pass. Configured provider boundary and durable local worker implemented; autosave implemented; live-provider verification, source correction and deletion remain |
 | M3: Today and reconnecting | In progress | Due queue derives state on read; open loops, preferences, personal updates and optional grounded drafts remain |
 | M4: cohort import and voice | Not started | Roster source/reconciliation, private audio/transcription |
 | M5: UI and data controls | In progress | Core workspace browser-tested; complete interview/voice UI and export/deletion/privacy remain |
@@ -36,7 +36,7 @@ Implement the full Network OS PRD through M1–M6, including secure private work
 
 ## Continuation
 
-Next: add server-backed interview draft autosave, then source correction/deletion and invalidation before claiming M2 complete. The configured AI boundary and durable local interview worker are implemented, but the real-provider smoke test is blocked by an HTTP 401 credential rejection. Do not retry unchanged credentials or treat synthetic provider tests as live verification. Keep reviewing and committing small verified slices. AWS credit coverage, domain and model configuration are deployment inputs; they do not block local work.
+Next: implement source correction/deletion and invalidation before claiming M2 complete. Server-backed draft autosave is implemented and verified; continue from its local checkpoint. The configured AI boundary and durable local interview worker are implemented, but the real-provider smoke test is blocked by an HTTP 401 credential rejection. Do not retry unchanged credentials or treat synthetic provider tests as live verification. Keep reviewing and committing small verified slices. AWS credit coverage, domain and model configuration are deployment inputs; they do not block local work.
 
 ## Checkpoints
 
@@ -100,7 +100,7 @@ Remote database connections require a valid certificate chain. Set `DATABASE_CA_
 - Next worker integration must not let the legacy `processQueuedAITasks` loop claim new interview jobs: it currently claims every queued task and has neither atomic leases nor source-revision validation. Reuse/extend the task storage deliberately, isolate execution by task type, and preserve the import flow while adding cancellation and consent checks. Do not silently use the old default model or fall back from local processing to cloud.
 
 
-## M2 configured interviewer and durable worker
+## M2 configured interviewer and durable worker — `c29ebb5`
 
 - Added explicit provider/model consent, fixed-endpoint OpenRouter requests, private routing parameters, bounded context/output/timeouts, disabled SDK logging, and sanitized errors. No implicit model or provider fallback. A working credential and explicit model setting remain operator inputs.
 - Extended the existing job table with revision-aware generation identity, atomic leases, delayed retries and cancellation. One in-flight request per owner, three attempts per request and forty reserved attempts per UTC day. Owner authorization and consent are rechecked before context collection and publication; archived/deleted inferred candidates also invalidate results even when no proposals are returned.
@@ -110,3 +110,12 @@ Remote database connections require a valid certificate chain. Set `DATABASE_CA_
 - All three browser workflows passed with test-only provider injection; desktop and 390px mobile interview screenshots were inspected. The targeted browser rerun passed (54.8 seconds including startup), including the final 202 response contract. The final production build passed after all backend and response-contract changes; its lint and type checks passed too.
 - Worker `--once` startup passed against the disposable database. Real-provider smoke testing sent only synthetic context and received HTTP 401. A request for a working credential was made; never put the key in chat or Git. No live schema/data migration, AWS provisioning or messages to contacts occurred.
 - Configuration, limits, recovery and verification commands are documented in `docs/NETWORK_OS_OPERATIONS.md`. Autosave and correction/forget workflows still remain; this is not full M2 completion.
+
+
+## M2 interview draft autosave — verified checkpoint
+
+- Added server-backed drafts separate from submitted turns and model context. Migration `0008_large_power_pack.sql` is additive and applied only to the disposable local database.
+- Draft saves preserve exact whitespace, carry independent revisions and retry-stable keys, and reject foreign access, stale tabs and writes to inactive interviews. Submission checks the saved draft and clears it atomically with turn creation. Replaying old requests cannot restore the cleared draft or duplicate a turn.
+- The client debounces and serializes autosaves, retains failed input in memory, visibly distinguishes waiting/saving/acknowledged states, and retries lost acknowledgments. Interview lists do not return draft bodies. Completing an interview with an unfinished draft is rejected.
+- All 23 database tests pass. The first run exposed a quota fixture left exhausted by a previous test; isolated that state and reran successfully. All 23 unit tests and lint pass. The four browser workflows passed (2.0 minutes), and the final targeted autosave rerun passed (38.4 seconds), including pause/resume after reload. The first pause test reloaded before acknowledgment; corrected it to wait for the persisted pause state. Desktop and 390px mobile screenshots inspected with no overflow. Final production build and explicit typecheck passed after all changes (exec session `22790` completed).
+- Added the final UI safeguards: editor state remounts per interview ID, editing is held during pause/submission transitions, and transitions use the latest acknowledged conversation revision. The reviewed slice is ready for its local commit; no live schema/data or AWS resource changed. Next full feature is source correction/forgetting with invalidation; M3–M6 remain incomplete.

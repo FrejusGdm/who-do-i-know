@@ -466,3 +466,58 @@ test('daily usage remains bounded across explicit retries and changed configurat
   }
   assert.equal(calls, 0); assert.equal((await interviewAIStatus(owner)).requestsToday, INTERVIEW_LIMITS.dailyRequests);
 });
+
+test('interview drafts persist exact words, reject foreign and stale writes, and replay uncertain acknowledgments', async () => {
+  const { createInterview, saveInterviewDraft, getInterview, listInterviews, changeInterviewStatus } = await import('../../src/lib/network/interviews');
+  const interview = await createInterview(owner, { requestKey: randomUUID() });
+  const input = { requestKey: randomUUID(), revision: 1, content: '  Unfinished draft\nwith uncertainty.  ' };
+  await assert.rejects(() => saveInterviewDraft(stranger, interview.id, input), notFound);
+  const saved = await saveInterviewDraft(owner, interview.id, input);
+  assert.deepEqual(await saveInterviewDraft(owner, interview.id, input), saved);
+  assert.equal(saved.content, input.content); assert.equal(saved.revision, 2);
+  const record = await getInterview(owner, interview.id);
+  assert.equal(record.interview.revision, 1); assert.equal(record.turns.length, 0); assert.equal(record.proposals.length, 0);
+  assert.equal(record.interview.draftContent, input.content);
+  assert.equal('draftContent' in (await listInterviews(owner))[0], false);
+  await assert.rejects(() => saveInterviewDraft(owner, interview.id, { ...input, content: 'Different retry' }), conflict);
+  const updates = await Promise.allSettled(['First tab', 'Second tab'].map((content) => saveInterviewDraft(owner, interview.id, { requestKey: randomUUID(), revision: 2, content })));
+  assert.equal(updates.filter((value) => value.status === 'fulfilled').length, 1);
+  await assert.rejects(() => saveInterviewDraft(owner, interview.id, input), conflict);
+  await assert.rejects(() => changeInterviewStatus(owner, interview.id, { revision: 1, status: 'completed' }), conflict);
+  await changeInterviewStatus(owner, interview.id, { revision: 1, status: 'paused' });
+  await assert.rejects(() => saveInterviewDraft(owner, interview.id, { requestKey: randomUUID(), revision: 3, content: 'Late paused write' }), conflict);
+});
+
+test('submitting a draft atomically clears it and delayed autosaves or repeated submissions cannot restore it', async () => {
+  const { createInterview, saveInterviewDraft, appendInterviewTurn, getInterview } = await import('../../src/lib/network/interviews');
+  const interview = await createInterview(owner, { requestKey: randomUUID() });
+  const input = { requestKey: randomUUID(), revision: 1, content: '  A submitted recollection.  ' };
+  const draft = await saveInterviewDraft(owner, interview.id, input);
+  await assert.rejects(() => appendInterviewTurn(owner, interview.id, { requestKey: randomUUID(), revision: 1, draftRevision: 1, content: draft.content }), conflict);
+  await assert.rejects(() => appendInterviewTurn(owner, interview.id, { requestKey: randomUUID(), revision: 1, draftRevision: 2, content: 'Mismatched words' }), conflict);
+  const submit = { requestKey: randomUUID(), revision: 1, draftRevision: draft.revision, content: draft.content };
+  const result = await appendInterviewTurn(owner, interview.id, submit);
+  assert.equal(result.interview.draftContent, ''); assert.equal(result.interview.draftRevision, 3);
+  assert.equal((await appendInterviewTurn(owner, interview.id, submit)).turn.id, result.turn.id);
+  await assert.rejects(() => saveInterviewDraft(owner, interview.id, input), conflict);
+  await assert.rejects(() => saveInterviewDraft(owner, interview.id, { ...input, requestKey: randomUUID(), revision: 2 }), conflict);
+  await saveInterviewDraft(owner, interview.id, { requestKey: randomUUID(), revision: 3, content: 'Next draft' });
+  await appendInterviewTurn(owner, interview.id, submit);
+  const record = await getInterview(owner, interview.id);
+  assert.equal(record.turns.length, 1); assert.equal(record.interview.draftContent, 'Next draft');
+});
+
+test('unsubmitted drafts never enter interview model context or create generation work', async () => {
+  const { createInterview, saveInterviewDraft, getInterview } = await import('../../src/lib/network/interviews');
+  const { queueInterview, claimInterviewJob, interviewJobContext, interviewJob } = await import('../../src/lib/network/interview-jobs');
+  await enableInterviewAI();
+  const { networkAiUsage } = await import('../../src/db/schema');
+  await db.delete(networkAiUsage).where(eq(networkAiUsage.userId, owner));
+  const interview = await createInterview(owner, { requestKey: randomUUID() });
+  await saveInterviewDraft(owner, interview.id, { requestKey: randomUUID(), revision: 1, content: 'draft-only-private-needle' });
+  assert.equal(await interviewJob(owner, interview.id), null);
+  await queueInterview(owner, interview.id, { requestKey: randomUUID(), revision: 1 });
+  const job = await claimInterviewJob(owner); assert.ok(job);
+  assert.equal(JSON.stringify(await interviewJobContext(job)).includes('draft-only-private-needle'), false);
+  assert.equal((await getInterview(owner, interview.id)).turns.length, 0);
+});

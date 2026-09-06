@@ -19,6 +19,7 @@ import {
   appendTurnInput,
   createInterviewInput,
   interviewStatusInput,
+  interviewDraftInput,
   proposalInput,
   reviewProposalInput,
   type ProposalPayload,
@@ -89,26 +90,77 @@ export async function createInterview(
     }
     if (personIds.length) await lockPeople(tx, userId, personIds);
     if (personIds.length)
-      await tx
-        .insert(interviewPeople)
-        .values(
-          personIds.map((personId) => ({
-            userId,
-            interviewId: created.id,
-            personId,
-          })),
-        );
+      await tx.insert(interviewPeople).values(
+        personIds.map((personId) => ({
+          userId,
+          interviewId: created.id,
+          personId,
+        })),
+      );
     return created;
   });
 }
 
 export async function listInterviews(userId: string) {
   return db
-    .select()
+    .select({
+      id: interviews.id,
+      title: interviews.title,
+      mode: interviews.mode,
+      status: interviews.status,
+      updatedAt: interviews.updatedAt,
+    })
     .from(interviews)
     .where(eq(interviews.userId, userId))
     .orderBy(desc(interviews.updatedAt))
     .limit(100);
+}
+
+export type InterviewDraft = { content: string; revision: number };
+export async function saveInterviewDraft(
+  userId: string,
+  interviewId: string,
+  raw: z.input<typeof interviewDraftInput>,
+): Promise<InterviewDraft> {
+  const input = interviewDraftInput.parse(raw);
+  return db.transaction(async (tx) => {
+    const interview = await lockInterview(tx, userId, interviewId);
+    if (!["active", "reviewing"].includes(interview.status))
+      throw new NetworkError(
+        409,
+        "Resume this interview before editing its draft",
+      );
+    if (interview.draftRequestKey === input.requestKey) {
+      if (
+        interview.draftContent !== input.content ||
+        interview.draftRevision !== input.revision + 1
+      )
+        throw new NetworkError(
+          409,
+          "This draft request key belongs to different words",
+        );
+      return {
+        content: interview.draftContent,
+        revision: interview.draftRevision,
+      };
+    }
+    if (interview.draftRevision !== input.revision)
+      throw new NetworkError(
+        409,
+        "This draft changed in another session. Your unsaved words are still in this tab; reopen the interview in another tab to compare them",
+      );
+    const [saved] = await tx
+      .update(interviews)
+      .set({
+        draftContent: input.content,
+        draftRevision: interview.draftRevision + 1,
+        draftRequestKey: input.requestKey,
+        updatedAt: new Date(),
+      })
+      .where(eq(interviews.id, interviewId))
+      .returning();
+    return { content: saved.draftContent, revision: saved.draftRevision };
+  });
 }
 export async function getInterview(userId: string, id: string) {
   if (!z.string().uuid().safeParse(id).success)
@@ -200,6 +252,15 @@ export async function appendInterviewTurn(
         409,
         "The interview changed. Reload its saved turns before retrying",
       );
+    if (
+      input.draftRevision !== undefined &&
+      (interview.draftRevision !== input.draftRevision ||
+        interview.draftContent.trim() !== input.content)
+    )
+      throw new NetworkError(
+        409,
+        "The draft changed. Review the latest words before submitting",
+      );
     const [size] = await tx
       .select({
         count: sql<number>`count(*)::int`,
@@ -230,6 +291,13 @@ export async function appendInterviewTurn(
       .set({
         revision: interview.revision + 1,
         status: "active",
+        ...(input.draftRevision === undefined
+          ? {}
+          : {
+              draftContent: "",
+              draftRevision: interview.draftRevision + 1,
+              draftRequestKey: null,
+            }),
         updatedAt: new Date(),
       })
       .where(eq(interviews.id, interviewId))
@@ -255,6 +323,11 @@ export async function changeInterviewStatus(
         "The interview changed. Reload before changing its status",
       );
     if (input.status === "completed") {
+      if (interview.draftContent.trim())
+        throw new NetworkError(
+          409,
+          "Submit or clear the saved draft before finishing",
+        );
       const [pending] = await tx
         .select({ id: memoryProposals.id })
         .from(memoryProposals)
@@ -406,18 +479,16 @@ export async function publishInterviewGeneration(
       })
       .returning();
     if (proposals.length)
-      await tx
-        .insert(memoryProposals)
-        .values(
-          proposals.map((proposal, ordinal) => ({
-            ...proposal,
-            userId,
-            interviewId,
-            generationKey: input.generationKey,
-            sourceRevision: input.sourceRevision,
-            ordinal,
-          })),
-        );
+      await tx.insert(memoryProposals).values(
+        proposals.map((proposal, ordinal) => ({
+          ...proposal,
+          userId,
+          interviewId,
+          generationKey: input.generationKey,
+          sourceRevision: input.sourceRevision,
+          ordinal,
+        })),
+      );
     await tx
       .update(interviews)
       .set({ revision: interview.revision + 1, updatedAt: new Date() })

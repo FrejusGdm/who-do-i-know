@@ -13,9 +13,10 @@ import type {
 } from "@/lib/network/interview-jobs";
 import { useInterviewAI } from "./useInterviewAI";
 import { InterviewAIControls } from "./InterviewAIControls";
+import { useInterviewDraft } from "./useInterviewDraft";
 type InterviewState = Pick<
   typeof interviews.$inferSelect,
-  "id" | "title" | "status" | "revision"
+  "id" | "title" | "status" | "revision" | "draftContent" | "draftRevision"
 >;
 type TurnView = Pick<
   typeof interviewTurns.$inferSelect,
@@ -46,7 +47,17 @@ export function InterviewWorkspace({
   const [interview, setInterview] = useState(initial.interview);
   const [turns, setTurns] = useState(initial.turns);
   const [proposals, setProposals] = useState(initial.proposals);
-  const [content, setContent] = useState("");
+  const writable = ["active", "reviewing"].includes(interview.status);
+  const draft = useInterviewDraft(
+    initial.interview.id,
+    {
+      content: initial.interview.draftContent,
+      revision: initial.interview.draftRevision,
+    },
+    writable,
+  );
+  const content = draft.content;
+  const [submitting, setSubmitting] = useState(false);
   const [view, setView] = useState<"conversation" | "review">("conversation");
   const [saved, setSaved] = useState(false);
   const latestRevision = useRef(initial.interview.revision);
@@ -75,20 +86,31 @@ export function InterviewWorkspace({
     content: string;
     revision: number;
   } | null>(null);
-  const writable = ["active", "reviewing"].includes(interview.status);
   const pendingCount = proposals.filter(
     (proposal) => proposal.status === "pending",
   ).length;
   async function setStatus(status: InterviewState["status"]) {
+    if (submitting) return;
+    setSubmitting(true);
+    if (writable) {
+      draft.hold();
+      if (!(await draft.flush())) {
+        draft.release();
+        setSubmitting(false);
+        return;
+      }
+    }
     const result = await statusMutation.save<{ interview: InterviewState }>(
       `/api/interviews/${interview.id}`,
       "PATCH",
-      { revision: interview.revision, status },
+      { revision: latestRevision.current, status },
     );
     if (result) {
       latestRevision.current = result.interview.revision;
       setInterview(result.interview);
     }
+    draft.release();
+    setSubmitting(false);
   }
   return (
     <div className="space-y-6">
@@ -105,7 +127,7 @@ export function InterviewWorkspace({
           {writable && (
             <button
               className={secondaryButtonClass}
-              disabled={statusMutation.pending || turnMutation.pending}
+              disabled={statusMutation.pending || submitting || draft.pending}
               onClick={() => void setStatus("paused")}
             >
               Pause interview
@@ -114,7 +136,7 @@ export function InterviewWorkspace({
           {["paused", "completed"].includes(interview.status) && (
             <button
               className={secondaryButtonClass}
-              disabled={statusMutation.pending}
+              disabled={statusMutation.pending || submitting}
               onClick={() => void setStatus("active")}
             >
               Resume interview
@@ -125,7 +147,8 @@ export function InterviewWorkspace({
               className={secondaryButtonClass}
               disabled={
                 statusMutation.pending ||
-                turnMutation.pending ||
+                submitting ||
+                draft.pending ||
                 pendingCount > 0 ||
                 !!content.trim()
               }
@@ -213,13 +236,26 @@ export function InterviewWorkspace({
               className="space-y-3"
               onSubmit={async (event) => {
                 event.preventDefault();
-                const words = content.trim();
-                if (!words) return;
+                if (submitting || !content.trim()) return;
+                setSubmitting(true);
+                draft.hold();
+                const savedDraft = await draft.flush();
+                if (!savedDraft) {
+                  setSubmitting(false);
+                  draft.release();
+                  return;
+                }
+                const words = savedDraft.content.trim();
+                if (!words) {
+                  setSubmitting(false);
+                  draft.release();
+                  return;
+                }
                 if (!request.current || request.current.content !== words)
                   request.current = {
                     key: crypto.randomUUID(),
                     content: words,
-                    revision: interview.revision,
+                    revision: latestRevision.current,
                   };
                 const result = await turnMutation.save<{
                   interview: InterviewState;
@@ -228,6 +264,7 @@ export function InterviewWorkspace({
                   requestKey: request.current.key,
                   revision: request.current.revision,
                   content: words,
+                  draftRevision: savedDraft.revision,
                 });
                 if (result) {
                   latestRevision.current = result.interview.revision;
@@ -237,13 +274,19 @@ export function InterviewWorkspace({
                       ? current
                       : [...current, result.turn],
                   );
-                  setContent((current) =>
-                    current.trim() === words ? "" : current,
+                  draft.submitted(
+                    {
+                      content: result.interview.draftContent,
+                      revision: result.interview.draftRevision,
+                    },
+                    words,
                   );
                   setSaved(true);
                   request.current = null;
                   if (ai.status.allowed) void ai.ask(result.interview.revision);
                 }
+                setSubmitting(false);
+                draft.release();
               }}
             >
               <label className="block space-y-2">
@@ -255,29 +298,57 @@ export function InterviewWorkspace({
                   required
                   maxLength={12000}
                   value={content}
+                  readOnly={submitting}
                   onChange={(event) => {
-                    setContent(event.target.value);
+                    draft.edit(event.target.value);
                     setSaved(false);
                   }}
                   placeholder="We talked about…"
                 />
               </label>
-              <p className="text-sm text-[#62685e]">
-                Unsaved words stay in this open tab. Save before leaving.
-              </p>
+              <div
+                className="space-y-2 text-sm text-[#62685e]"
+                aria-label="Draft saving"
+              >
+                <p role="status">
+                  {draft.pending
+                    ? "Saving draft…"
+                    : draft.dirty
+                      ? "Changes waiting to save"
+                      : content
+                        ? "Draft saved privately"
+                        : "Drafts save automatically as you write."}
+                </p>
+                <p>
+                  Your draft enters the conversation when you save the
+                  recollection. AI only receives submitted entries after you
+                  allow it.
+                </p>
+                {draft.error && (
+                  <p role="alert" className="text-red-800">
+                    {draft.error}
+                  </p>
+                )}
+                {draft.error && (
+                  <button
+                    type="button"
+                    className={secondaryButtonClass}
+                    disabled={draft.pending || submitting}
+                    onClick={() => void draft.flush()}
+                  >
+                    Retry draft save
+                  </button>
+                )}
+              </div>
               <SaveFeedback {...turnMutation} />
               <div className="flex flex-wrap items-center gap-3">
                 <button
                   className={buttonClass}
                   disabled={
-                    turnMutation.pending ||
-                    statusMutation.pending ||
-                    !content.trim()
+                    submitting || statusMutation.pending || !content.trim()
                   }
                 >
-                  {turnMutation.pending
-                    ? "Saving your words…"
-                    : "Save recollection"}
+                  {submitting ? "Saving your words…" : "Save recollection"}
                 </button>
                 <span role="status" className="text-sm text-[#43664F]">
                   {saved ? "Saved to your private notebook" : ""}

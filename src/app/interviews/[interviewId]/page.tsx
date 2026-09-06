@@ -51,6 +51,7 @@ export default async function InterviewPage({
         }
       />
       <InterviewWorkspace
+        key={record.interview.id}
         initial={record}
         people={options}
         circles={circles}

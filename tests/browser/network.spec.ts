@@ -479,3 +479,57 @@ test('AI consent, durable generation, polling recovery and review work together 
   await expect(controls.getByRole('button', { name: 'Allow AI interviews with this provider' })).toBeVisible();
   await expect(page.getByText('I would like to ask about a local walk.', { exact: true })).toBeVisible();
 });
+
+test('private drafts autosave, survive reload, recover failed acknowledgments and resist another tab overwriting them', async ({ page, context }) => {
+  const interview = await createInterview(owner, { requestKey: randomUUID(), title: 'Autosave fixture' });
+  await page.goto(`/interviews/${interview.id}`);
+  const input = page.getByLabel('What would you like to remember?');
+  const saving = page.getByLabel('Draft saving', { exact: true });
+  await input.fill('An unfinished thought with an uncertain date.');
+  await expect(saving.getByRole('status')).toHaveText('Draft saved privately');
+  expect((await getInterview(owner, interview.id)).turns).toHaveLength(0);
+  await page.reload();
+  await expect(input).toHaveValue('An unfinished thought with an uncertain date.');
+  // The server commits this save, but the client never receives its acknowledgment.
+  let lost = false;
+  await page.route('**/draft', async (route) => {
+    if (!lost) { lost = true; await route.fetch(); await route.abort(); }
+    else await route.continue();
+  });
+  await input.fill('Words saved despite a lost acknowledgment.');
+  await expect(saving.getByRole('alert')).toContainText('Connection interrupted');
+  await expect(input).toHaveValue('Words saved despite a lost acknowledgment.');
+  await saving.getByRole('button', { name: 'Retry draft save' }).click();
+  await expect(saving.getByRole('status')).toHaveText('Draft saved privately');
+  await page.unroute('**/draft');
+  await page.getByRole('button', { name: 'Pause interview', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Resume interview', exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Resume interview', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Resume interview', exact: true }).click();
+  await expect(input).toHaveValue('Words saved despite a lost acknowledgment.');
+  const denied = await context.request.put(`/api/interviews/${interview.id}/draft`, { headers: { origin: 'https://untrusted.example' }, data: { requestKey: randomUUID(), revision: 1, content: 'Forged draft' } });
+  expect(denied.status()).toBe(403);
+  const foreign = await createInterview(stranger, { requestKey: randomUUID() });
+  expect((await context.request.put(`/api/interviews/${foreign.id}/draft`, { headers: { origin }, data: { requestKey: randomUUID(), revision: 1, content: 'Foreign write' } })).status()).toBe(404);
+  const other = await context.newPage();
+  await other.goto(`/interviews/${interview.id}`);
+  await input.fill('Newer words from the first tab.');
+  await expect(saving.getByRole('status')).toHaveText('Draft saved privately');
+  await other.getByLabel('What would you like to remember?').fill('Stale words from the second tab.');
+  await expect(other.getByLabel('Draft saving', { exact: true }).getByRole('alert')).toContainText('saved draft changed');
+  expect((await getInterview(owner, interview.id)).interview.draftContent).toBe('Newer words from the first tab.');
+  await expect(other.getByLabel('What would you like to remember?')).toHaveValue('Stale words from the second tab.');
+  await other.close();
+  await page.screenshot({ path: '/private/tmp/network-os-autosave-desktop.png', fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: '/private/tmp/network-os-autosave-mobile.png', fullPage: true });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.getByRole('button', { name: 'Save recollection', exact: true }).click();
+  await expect(page.getByText('Saved to your private notebook', { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(input).toHaveValue('');
+  const record = await getInterview(owner, interview.id);
+  expect(record.turns.filter((turn) => turn.role === 'user')).toHaveLength(1);
+  expect(record.interview.draftContent).toBe('');
+});
