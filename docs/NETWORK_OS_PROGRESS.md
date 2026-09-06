@@ -19,7 +19,7 @@ Implement the full Network OS PRD through M1–M6, including secure private work
 | --- | --- | --- |
 | M0: baseline and design | In progress | Repo and objective inspected; branch created; initial security patches committed; remaining dependency assessment before deployment |
 | M1: people, circles, interactions, cadence | In progress | Storage, owner-scoped routes and working People/Circles/Person/Today UI implemented; 17 unit tests, 8 PostgreSQL tests and full desktop/mobile browser flow passed; production build, type checking and lint passed |
-| M2: interviews and reviewed memory | In progress | Persistent turns and all eight proposal types implemented; atomic review, replay, grounding and ownership tests pass. Provider/jobs, API/UI, and source correction remain |
+| M2: interviews and reviewed memory | In progress | Storage, authenticated API, capture/review UI and profile source links implemented; browser and database checks pass. Real provider/jobs, autosave, source correction and deletion remain |
 | M3: Today and reconnecting | In progress | Due queue derives state on read; open loops, preferences, personal updates and optional grounded drafts remain |
 | M4: cohort import and voice | Not started | Roster source/reconciliation, private audio/transcription |
 | M5: UI and data controls | In progress | Core workspace browser-tested; complete interview/voice UI and export/deletion/privacy remain |
@@ -36,7 +36,7 @@ Implement the full Network OS PRD through M1–M6, including secure private work
 
 ## Continuation
 
-Next: wire the authenticated interview API and capture/review UI, then add the configured AI provider through durable revision-aware work with explicit processing consent. The storage boundary is implemented and tested; it is not yet a usable AI interview. Source correction/deletion and provenance in the profile remain required. Keep reviewing and committing small verified slices. AWS credit coverage, domain and model configuration are deployment inputs; they do not block local work.
+Next: add the configured AI provider through durable revision-aware work with explicit processing consent, bounded requests and retry/cancellation checks. The capture/review UI and internal generation boundary are implemented; the app does not yet run a real AI interview. Add autosave, source correction/deletion and invalidation before claiming M2 complete. Keep reviewing and committing small verified slices. AWS credit coverage, domain and model configuration are deployment inputs; they do not block local work.
 
 ## Checkpoints
 
@@ -80,10 +80,21 @@ Remote database connections require a valid certificate chain. Set `DATABASE_CA_
 - Final browser rerun passed (2.8 minutes including startup). Today, Circle, Person and People screenshots inspected; no mobile horizontal overflow. Production build, type checking and lint all passed. Exec session `38818` completed successfully; no build/dev process from this run remains active. Run build/dev checks sequentially against `.next`.
 - Added Playwright and Prettier as development dependencies; `npm run test:browser` runs the fixture-isolated browser suite with explicit TEST_DATABASE_URL. The tests use installed Chrome.
 
-## M2 interview storage checkpoint
+## M2 interview storage checkpoint — `4f43a42`
 
 - Added owner-scoped interviews, ordered turns, participants, grounded proposals, confirmed facts, open loops and personal updates. Migration `0006_robust_marvex.sql` applied successfully only to the disposable local database; composite unique indexes precede foreign keys.
 - Session creation and turn saves are idempotent. Revision checks reject late model results; quotes must match current user-authored turns exactly. Unknown identities remain unresolved until explicit review. Model output cannot grant draft-sharing permission.
 - All eight proposal types accept individually in the same transaction as their materialized records. Repeated/concurrent acceptance cannot duplicate notes or group interactions. Stale plans, foreign destinations and sensitive sharing requests roll back without changing review state.
-- Verified 20 unit tests and 14 PostgreSQL integration tests, lint and production build. No UI changed in this checkpoint. These are synthetic storage/provider-boundary fixtures, not a real AI-provider test. No live database, AWS resource or private record changed.
+- Verified 20 unit tests and 14 PostgreSQL integration tests, type checking, lint and production build. No UI changed in this checkpoint. These are synthetic storage/provider-boundary fixtures, not a real AI-provider test. No live database, AWS resource or private record changed.
 - Remaining M2: HTTP routes, capture/review UI, configured provider with consent and bounded durable execution, source corrections/forgetting, and timeline provenance. Full M1–M6 goal remains active.
+
+## M2 capture and review workspace
+
+- Added owner-scoped interview list/create/read/status, turn-save and proposal-review routes; no public endpoint accepts model generations. Added Interviews navigation, Today capture link, desktop conversation/review columns and mobile view controls.
+- Capture preserves failed input in the open tab, resumes after reload, and supports pause/resume/finish. Review shows exact source quotes, unresolved-name selection, editable fields for all eight proposal types, sensitivity and explicit sharing choices, and separate accept/reject actions.
+- Reviewed notes/interactions and confirmed profile details link to the source interview. Keyword search includes active confirmed details and excludes stale details. PostgreSQL regression suite remains 14 passing tests.
+- First browser run passed the existing people/circle/plan flow but the new test failed at a dynamic test-only module import; static imports fixed Playwright alias resolution. The next run exposed an overly broad alert assertion matching Next's route announcer; scoped it to the capture region.
+- Interview workflow then passed in Chrome: failed capture and review saves retain edits, reload and pause/resume work, ambiguous identity requires confirmation, acceptance creates one private note, rejection persists, source links return to the interview, literal HTML is not executed, and foreign IDs/forged sessions/missing Origin/oversized bodies are rejected. Desktop and 390px mobile screenshots inspected; no horizontal overflow.
+- Lint, production build and explicit typecheck passed. Final targeted browser rerun also passed (23.9 seconds including startup), including opening a source quote from mobile review and returning to the preserved edits. Exec session `78457` completed; no build/dev process from this checkpoint remains active.
+- This screen currently uses explicit Save, not autosave, and clearly states the AI provider is not connected. Browser model output comes only from synthetic test fixtures passed to the internal publication boundary. No real inference, production migration, deployment or outreach took place.
+- Next worker integration must not let the legacy `processQueuedAITasks` loop claim new interview jobs: it currently claims every queued task and has neither atomic leases nor source-revision validation. Reuse/extend the task storage deliberately, isolate execution by task type, and preserve the import flow while adding cancellation and consent checks. Do not silently use the old default model or fall back from local processing to cloud.

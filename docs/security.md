@@ -164,4 +164,8 @@ Relationship operations enforce owner IDs in queries and composite foreign keys.
 
 ## Known deployment work
 
-This document describes implemented boundaries, not a deployment security certification. Gmail scopes are still requested at sign-in and need a separate optional connection flow. Existing local archive storage and in-memory pipeline progress need durable replacements. Private object storage, worker permissions, retention, AI review and export/deletion controls are tracked in the Network OS PRD and progress record.
+Interview routes use the same server-validated session, exact-origin mutation guard and bounded JSON reader as other Network OS routes. Every interview/turn/proposal read or write checks its owner and parent interview. The client cannot publish model output: generation publication is an internal boundary. Browser tests exercise foreign interview IDs, foreign parent/proposal combinations, missing Origin, forged cookies, oversized turns and private response caching.
+
+Suggestions carry exact source quotes and start private. Individual review atomically saves a memory and its acceptance record, validates identities and current source revisions, and rejects attempts to share sensitive context. React renders source and proposal text without interpreting HTML. Unsent words remain in client memory for retry; no transcript is stored in localStorage. Capture currently saves only on explicit submission, and the real AI provider and durable job connection are still pending.
+
+This document describes implemented boundaries, not a deployment security certification. Gmail scopes are still requested at sign-in and need a separate optional connection flow. Existing local archive storage and in-memory pipeline progress need durable replacements. Private object storage, worker permissions, retention, source correction/invalidation and export/deletion controls are tracked in the Network OS PRD and progress record.

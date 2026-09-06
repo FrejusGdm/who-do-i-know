@@ -5,6 +5,12 @@ import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { makeSignature } from "better-auth/crypto";
 import { db, closeDatabase } from "../../src/db";
 import { user, session, keepInTouchPlans, people } from "../../src/db/schema";
+import { createPerson } from "../../src/lib/network/store";
+import {
+  createInterview,
+  publishInterviewGeneration,
+  getInterview,
+} from "../../src/lib/network/interviews";
 const origin = "http://127.0.0.1:3007";
 const owner = `browser-owner-${randomUUID()}`;
 const stranger = `browser-stranger-${randomUUID()}`;
@@ -215,4 +221,207 @@ test("circle, name-only person, real contact and quarterly plan persist across d
     headers: { cookie: "better-auth.session_token=forged" },
   });
   expect(forged.status()).toBe(401);
+});
+
+test("interview capture, identity review, private memory and source links survive reload", async ({
+  page,
+  context,
+}) => {
+  const { notes: noteTable } = await import("../../src/db/schema");
+  const person = await createPerson(owner, {
+    name: "Taylor Interview Fixture",
+  });
+  const foreignInterview = await createInterview(stranger, {
+    requestKey: randomUUID(),
+    title: "Foreign interview fixture",
+  });
+  await page.goto("/interviews");
+  await expect(
+    page.getByRole("heading", { name: "Your conversations" }),
+  ).toBeVisible();
+  await page
+    .getByLabel("Conversation title")
+    .fill("Remembering a shared afternoon");
+  await page
+    .getByRole("button", { name: "Start a conversation", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/interviews\/[0-9a-f-]+$/);
+  const interviewId = page.url().split("/").pop()!;
+  const words = "Taylor enjoys climbing. Sam is applying to graduate school.";
+  await page.getByLabel("What would you like to remember?").fill(words);
+  await page.route("**/turns", (route) => route.abort());
+  await page.getByRole("button", { name: "Save recollection" }).click();
+  await expect(
+    page.getByRole("region", { name: "Saved conversation" }).getByRole("alert"),
+  ).toContainText("Your input is still here");
+  await expect(page.getByLabel("What would you like to remember?")).toHaveValue(
+    words,
+  );
+  await page.unroute("**/turns");
+  await page.getByRole("button", { name: "Save recollection" }).click();
+  await expect(
+    page.getByText("Saved to your private notebook", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Pause interview" }).click();
+  await expect(
+    page.getByRole("button", { name: "Resume interview" }),
+  ).toBeVisible();
+  await page.reload();
+  await expect(page.getByText(words, { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Resume interview" }).click();
+  await expect(
+    page.getByRole("button", { name: "Pause interview" }),
+  ).toBeVisible();
+  const saved = await getInterview(owner, interviewId);
+  const turn = saved.turns[0];
+  // Deterministic model output is injected through the internal boundary only in this test.
+  const generated = await publishInterviewGeneration(owner, interviewId, {
+    generationKey: randomUUID(),
+    sourceRevision: saved.interview.revision,
+    assistant: "Which Taylor is this about?",
+    proposals: [
+      {
+        payload: { kind: "note", body: "Enjoys climbing" },
+        sources: [
+          {
+            turnId: turn.id,
+            revision: turn.revision,
+            start: 0,
+            end: 23,
+            quote: "Taylor enjoys climbing.",
+          },
+        ],
+        identityHints: ["Taylor"],
+      },
+      {
+        payload: {
+          kind: "personal_update",
+          title: "Uncertain suggestion",
+          body: "<img src=x onerror=alert(1)>",
+        },
+        sources: [
+          {
+            turnId: turn.id,
+            revision: turn.revision,
+            start: 0,
+            end: 23,
+            quote: "Taylor enjoys climbing.",
+          },
+        ],
+        uncertainty: "A test-only unsupported interpretation to reject",
+      },
+    ],
+  });
+  await page.reload();
+  const card = page.getByRole("article", { name: "Private note suggestion" });
+  await expect(
+    card.getByRole("button", { name: "Save this memory" }),
+  ).toBeDisabled();
+  await card.getByRole("radio", { name: /Taylor Interview Fixture/ }).check();
+  await card.getByLabel("I have checked the identity above").check();
+  await card
+    .getByLabel("Memory to save")
+    .fill("Enjoys climbing; ask about a favorite route.");
+  await page.route("**/proposals/*", (route) => route.abort());
+  await card.getByRole("button", { name: "Save this memory" }).click();
+  await expect(card.getByRole("alert")).toContainText(
+    "Your input is still here",
+  );
+  await expect(card.getByLabel("Memory to save")).toHaveValue(
+    "Enjoys climbing; ask about a favorite route.",
+  );
+  await page.unroute("**/proposals/*");
+  await captureBoth(page, "interview-review");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "Review (2)", exact: true }).click();
+  await expect(card).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBeTruthy();
+  await page.screenshot({
+    path: "/private/tmp/network-os-interview-review-mobile.png",
+    fullPage: true,
+  });
+  await card.getByRole('link', { name: 'Taylor enjoys climbing.' }).click();
+  await expect(page.getByRole('region', { name: 'Saved conversation' })).toBeVisible();
+  await expect(page.locator(`#turn-${turn.id}`)).toBeVisible();
+  await page.getByRole('button', { name: 'Review (2)', exact: true }).click();
+  await card.getByRole("button", { name: "Save this memory" }).click();
+  await expect(
+    card.getByText("Saved to your notebook. No message was sent."),
+  ).toBeVisible();
+  const updateCard = page.getByRole("article", {
+    name: "Your personal update suggestion",
+  });
+  await expect(updateCard.locator("img")).toHaveCount(0);
+  await updateCard.getByRole("button", { name: "Reject suggestion" }).click();
+  await expect(updateCard.getByText("rejected", { exact: true })).toBeVisible();
+  await page.reload();
+  await page.getByRole("button", { name: "Review", exact: true }).click();
+  await expect(
+    card.getByText("Saved to your notebook. No message was sent."),
+  ).toBeVisible();
+  expect(
+    (await db.select().from(noteTable).where(eq(noteTable.personId, person.id)))
+      .length,
+  ).toBe(1);
+  await page.goto(`/people/${person.id}`);
+  await expect(
+    page.getByText("Enjoys climbing; ask about a favorite route.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Sam is applying to graduate school.", { exact: false }),
+  ).toHaveCount(0);
+  await page.getByRole("link", { name: "Reviewed in your interview" }).click();
+  await expect(page).toHaveURL(new RegExp(`/interviews/${interviewId}$`));
+  const deniedRead = await context.request.get(
+    `/api/interviews/${foreignInterview.id}`,
+  );
+  expect(deniedRead.status()).toBe(404);
+  const deniedTurn = await context.request.post(
+    `/api/interviews/${foreignInterview.id}/turns`,
+    {
+      headers: { origin },
+      data: {
+        requestKey: randomUUID(),
+        revision: 1,
+        content: "Denied fixture",
+      },
+    },
+  );
+  expect(deniedTurn.status()).toBe(404);
+  const deniedReview = await context.request.patch(
+    `/api/interviews/${foreignInterview.id}/proposals/${generated.proposals[0].id}`,
+    { headers: { origin }, data: { revision: 1, action: "accept" } },
+  );
+  expect(deniedReview.status()).toBe(404);
+  const deniedOrigin = await context.request.post("/api/interviews", {
+    data: { requestKey: randomUUID() },
+  });
+  expect(deniedOrigin.status()).toBe(403);
+  const oversized = await context.request.post(
+    `/api/interviews/${interviewId}/turns`,
+    {
+      headers: { origin },
+      data: {
+        requestKey: randomUUID(),
+        revision: 1,
+        content: "x".repeat(70000),
+      },
+    },
+  );
+  expect(oversized.status()).toBe(413);
+  const forgedRead = await context.request.get(
+    `/api/interviews/${interviewId}`,
+    { headers: { cookie: "better-auth.session_token=forged" } },
+  );
+  expect(forgedRead.status()).toBe(401);
+  const privateRead = await context.request.get(
+    `/api/interviews/${interviewId}`,
+  );
+  expect(privateRead.headers()["cache-control"]).toContain("no-store");
 });

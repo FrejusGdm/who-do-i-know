@@ -279,6 +279,14 @@ test('each supported memory type materializes only after individual review and r
   const current = await getInterview(owner, interview.id);
   const completed = await changeInterviewStatus(owner, interview.id, { revision: current.interview.revision, status: 'completed' });
   assert.equal(completed.status, 'completed');
+  const { networkPerson, networkPeople } = await import('../../src/lib/network/queries');
+  const profile = await networkPerson(owner, person.id);
+  assert.equal(profile.facts[0].sourceInterviewId, interview.id);
+  assert.equal(profile.facts[0].body, 'Climbing');
+  assert.ok((await networkPeople(owner, { q: 'Climbing' })).people.some((row) => row.id === person.id));
+  await db.update(confirmedFacts).set({ status: 'stale' }).where(eq(confirmedFacts.id, fact.id));
+  assert.equal((await networkPerson(owner, person.id)).facts.length, 0);
+  assert.equal((await networkPeople(owner, { q: 'Climbing' })).people.some((row) => row.id === person.id), false);
 });
 
 test('stale plan edits and foreign circles roll back review; sensitive context cannot be shared', async () => {

@@ -16,9 +16,11 @@ import { db } from "@/db";
 import {
   circleMembers,
   circles,
+  confirmedFacts,
   interactionParticipants,
   interactions,
   keepInTouchPlans,
+  memoryProposals,
   networkSettings,
   notes,
   people,
@@ -92,6 +94,22 @@ export async function networkPeople(
           ilike(people.primaryEmail, pattern),
           ilike(people.organization, pattern),
           ilike(people.manualNotes, pattern),
+          exists(
+            db
+              .select({ id: confirmedFacts.id })
+              .from(confirmedFacts)
+              .where(
+                and(
+                  eq(confirmedFacts.personId, people.id),
+                  eq(confirmedFacts.userId, userId),
+                  eq(confirmedFacts.status, "active"),
+                  or(
+                    ilike(confirmedFacts.label, pattern),
+                    ilike(confirmedFacts.body, pattern),
+                  ),
+                ),
+              ),
+          ),
           exists(
             db
               .select({ id: notes.id })
@@ -225,7 +243,7 @@ export async function networkPerson(userId: string, personId: string) {
     .from(people)
     .where(and(eq(people.id, personId), eq(people.userId, userId)));
   if (!person) throw new NetworkError(404, "Person not found");
-  const [plans, events, noteRows, circleRows] = await Promise.all([
+  const [plans, events, noteRows, circleRows, facts] = await Promise.all([
     db
       .select()
       .from(keepInTouchPlans)
@@ -237,13 +255,25 @@ export async function networkPerson(userId: string, personId: string) {
       )
       .limit(1),
     db
-      .select({ interaction: interactions })
+      .select({
+        interaction: interactions,
+        sourceInterviewId: memoryProposals.interviewId,
+      })
       .from(interactions)
       .innerJoin(
         interactionParticipants,
         and(
           eq(interactionParticipants.interactionId, interactions.id),
           eq(interactionParticipants.userId, userId),
+        ),
+      )
+      .leftJoin(
+        memoryProposals,
+        and(
+          eq(memoryProposals.userId, userId),
+          eq(memoryProposals.status, "accepted"),
+          sql`${memoryProposals.acceptedRef}->>'type' = 'interaction'`,
+          sql`${memoryProposals.acceptedRef}->>'id' = ${interactions.id}::text`,
         ),
       )
       .where(
@@ -258,19 +288,61 @@ export async function networkPerson(userId: string, personId: string) {
       )
       .limit(100),
     db
-      .select()
+      .select({
+        ...getTableColumns(notes),
+        sourceInterviewId: memoryProposals.interviewId,
+      })
       .from(notes)
+      .leftJoin(
+        memoryProposals,
+        and(
+          eq(memoryProposals.userId, userId),
+          eq(memoryProposals.status, "accepted"),
+          sql`${memoryProposals.acceptedRef}->>'type' = 'note'`,
+          sql`${memoryProposals.acceptedRef}->>'id' = ${notes.id}::text`,
+        ),
+      )
       .where(and(eq(notes.personId, personId), eq(notes.userId, userId)))
       .orderBy(desc(notes.createdAt))
       .limit(50),
     networkCircles(userId),
+    db
+      .select({
+        fact: confirmedFacts,
+        sourceInterviewId: memoryProposals.interviewId,
+      })
+      .from(confirmedFacts)
+      .leftJoin(
+        memoryProposals,
+        and(
+          eq(memoryProposals.id, confirmedFacts.proposalId),
+          eq(memoryProposals.userId, userId),
+          eq(memoryProposals.status, "accepted"),
+        ),
+      )
+      .where(
+        and(
+          eq(confirmedFacts.userId, userId),
+          eq(confirmedFacts.personId, personId),
+          eq(confirmedFacts.status, "active"),
+        ),
+      )
+      .orderBy(desc(confirmedFacts.createdAt))
+      .limit(100),
   ]);
   return {
     person,
     plan: plans[0] ?? null,
-    interactions: events.map((event) => event.interaction),
+    interactions: events.map((event) => ({
+      ...event.interaction,
+      sourceInterviewId: event.sourceInterviewId,
+    })),
     notes: noteRows,
     circles: circleRows,
+    facts: facts.map((row) => ({
+      ...row.fact,
+      sourceInterviewId: row.sourceInterviewId,
+    })),
   };
 }
 

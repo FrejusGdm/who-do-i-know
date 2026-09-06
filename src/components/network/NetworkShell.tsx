@@ -1,11 +1,18 @@
 import Link from "next/link";
-import { CalendarDays, Users, Layers3, ArrowUpRight } from "lucide-react";
+import {
+  CalendarDays,
+  Users,
+  Layers3,
+  ArrowUpRight,
+  MessageCircle,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const primary = [
   { href: "/dashboard", label: "Today", icon: CalendarDays },
   { href: "/people", label: "People", icon: Users },
   { href: "/circles", label: "Circles", icon: Layers3 },
+  { href: "/interviews", label: "Interviews", icon: MessageCircle },
 ];
 
 export function NetworkShell({
@@ -40,13 +47,13 @@ export function NetworkShell({
               href={href}
               aria-current={active === label ? "page" : undefined}
               className={cn(
-                "flex min-h-11 flex-1 items-center gap-2 rounded-md px-3 text-sm md:flex-none md:text-base",
+                "flex min-h-11 flex-1 items-center justify-center gap-2 rounded-md px-2 text-sm md:flex-none md:justify-start md:px-3 md:text-base",
                 active === label
                   ? "bg-[#e5eadd] font-medium text-[#344e3d]"
                   : "text-[#62685e] hover:bg-white",
               )}
             >
-              <Icon className="size-4" aria-hidden />
+              <Icon className="hidden size-4 sm:block" aria-hidden />
               {label}
             </Link>
           ))}
@@ -130,9 +137,9 @@ export function PageHeading({
 }) {
   return (
     <header className="mb-8 flex flex-col gap-5 border-b border-[#deded5] pb-7 sm:flex-row sm:items-end sm:justify-between">
-      <div>
+      <div className="min-w-0">
         {eyebrow && <p className="mb-3 text-sm text-[#62685e]">{eyebrow}</p>}
-        <h1 className="font-serif text-4xl text-balance">{title}</h1>
+        <h1 className="break-words font-serif text-4xl text-balance">{title}</h1>
         <p className="mt-3 max-w-xl text-pretty leading-6 text-[#62685e]">
           {description}
         </p>

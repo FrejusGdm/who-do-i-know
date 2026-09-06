@@ -36,9 +36,9 @@ export default async function DashboardPage() {
         title={`A little time for your people${greeting ? `, ${greeting}` : ""}.`}
         description="Start with someone you’ve been meaning to reach. There doesn’t have to be big news."
         action={
-          <Link href="/people" className={buttonClass}>
+          <Link href="/interviews" className={buttonClass}>
             <Plus className="size-4" aria-hidden />
-            Log a conversation
+            Capture a conversation
           </Link>
         }
       />

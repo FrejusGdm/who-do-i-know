@@ -27,7 +27,7 @@ export default async function PersonPage({
   });
   const settings = await ownerSettings(session.user.id);
   const today = todayInTimezone(settings.timezone);
-  const { person, plan, interactions, notes, circles } = data;
+  const { person, plan, interactions, notes, circles, facts } = data;
   const archived =
     person.archivedAt !== null || person.reviewStatus === "archived";
   const memberships = circles.filter((circle) =>
@@ -100,6 +100,37 @@ export default async function PersonPage({
               </p>
             </section>
           )}
+          {facts.length > 0 && (
+            <section className="space-y-3">
+              <h2 className="text-balance text-xl font-medium">
+                Details you have confirmed
+              </h2>
+              {facts.map((fact) => (
+                <article
+                  key={fact.id}
+                  className="rounded-lg border border-[#deded5] bg-white p-5"
+                >
+                  <h3 className="font-medium">{fact.label}</h3>
+                  <p className="mt-2 whitespace-pre-wrap break-words leading-7">
+                    {fact.body}
+                  </p>
+                  <p className="mt-3 text-sm text-[#62685e]">
+                    {fact.shareInDrafts
+                      ? "Allowed in drafts"
+                      : "Private context"}
+                  </p>
+                  {fact.sourceInterviewId && (
+                    <Link
+                      className="mt-2 inline-flex min-h-11 items-center text-sm text-[#43664F] underline"
+                      href={`/interviews/${fact.sourceInterviewId}`}
+                    >
+                      Reviewed in your interview
+                    </Link>
+                  )}
+                </article>
+              ))}
+            </section>
+          )}
           <section>
             <h2 className="mb-4 text-xl font-medium text-balance">
               Contact history
@@ -132,7 +163,17 @@ export default async function PersonPage({
                     {event.body}
                   </p>
                   <p className="mt-3 text-sm text-[#62685e]">
-                    Recorded by you ·{" "}
+                    {event.sourceInterviewId ? (
+                      <Link
+                        className="text-[#43664F] underline"
+                        href={`/interviews/${event.sourceInterviewId}`}
+                      >
+                        Reviewed in your interview
+                      </Link>
+                    ) : (
+                      "Recorded by you"
+                    )}{" "}
+                    ·{" "}
                     {event.qualifiesForCadence && event.datePrecision === "day"
                       ? "Counts toward rhythm"
                       : "Does not set a reminder date"}{" "}
@@ -167,7 +208,17 @@ export default async function PersonPage({
                 >
                   <p className="whitespace-pre-wrap leading-7">{note.body}</p>
                   <p className="mt-3 text-sm text-[#62685e]">
-                    Your note ·{" "}
+                    {note.sourceInterviewId ? (
+                      <Link
+                        className="text-[#43664F] underline"
+                        href={`/interviews/${note.sourceInterviewId}`}
+                      >
+                        Reviewed in your interview
+                      </Link>
+                    ) : (
+                      "Your note"
+                    )}{" "}
+                    ·{" "}
                     {new Intl.DateTimeFormat("en", {
                       timeZone: settings.timezone,
                       dateStyle: "medium",
