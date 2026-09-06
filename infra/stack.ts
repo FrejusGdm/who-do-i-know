@@ -140,7 +140,7 @@ export class ArtifactStack extends Stack {
       }),
       environment: {
         buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
-        computeType: codebuild.ComputeType.SMALL,
+        computeType: codebuild.ComputeType.MEDIUM,
         privileged: true,
       },
       environmentVariables: {

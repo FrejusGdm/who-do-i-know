@@ -7,7 +7,8 @@ RUN npm ci
 
 FROM dependencies AS build
 COPY . .
-RUN npm run build
+# Type checking needs more heap than the default container limit; runtime stays unchanged.
+RUN NODE_OPTIONS=--max-old-space-size=4096 npm run build
 
 FROM node:22-bookworm-slim AS runtime
 WORKDIR /app
