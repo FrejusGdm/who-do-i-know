@@ -10,6 +10,7 @@ import {
   secondaryButtonClass,
 } from "@/components/network/NetworkShell";
 import { InterviewWorkspace } from "@/components/network/InterviewWorkspace";
+import { interviewAIStatus, interviewJob } from "@/lib/network/interview-jobs";
 export const dynamic = "force-dynamic";
 export default async function InterviewPage({
   params,
@@ -24,9 +25,11 @@ export default async function InterviewPage({
       throw error;
     },
   );
-  const [people, circles] = await Promise.all([
+  const [people, circles, aiStatus, job] = await Promise.all([
     networkPeople(session.user.id, {}),
     networkCircles(session.user.id),
+    interviewAIStatus(session.user.id),
+    interviewJob(session.user.id, interviewId),
   ]);
   const options = [
     ...new Map(
@@ -47,7 +50,13 @@ export default async function InterviewPage({
           </Link>
         }
       />
-      <InterviewWorkspace initial={record} people={options} circles={circles} />
+      <InterviewWorkspace
+        initial={record}
+        people={options}
+        circles={circles}
+        initialAI={aiStatus}
+        initialJob={job}
+      />
     </NetworkShell>
   );
 }

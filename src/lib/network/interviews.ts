@@ -40,7 +40,7 @@ import {
 
 const fingerprint = (value: unknown) =>
   createHash("sha256").update(JSON.stringify(value)).digest("hex");
-async function lockInterview(tx: NetworkTx, userId: string, id: string) {
+export async function lockInterview(tx: NetworkTx, userId: string, id: string) {
   z.string().uuid().parse(id);
   const [row] = await tx
     .select()
@@ -307,6 +307,7 @@ export async function publishInterviewGeneration(
   userId: string,
   interviewId: string,
   raw: z.input<typeof publishInput>,
+  transaction?: NetworkTx,
 ) {
   const input = publishInput.parse(raw);
   const proposals = input.proposals.map((proposal) => ({
@@ -314,7 +315,7 @@ export async function publishInterviewGeneration(
     payload: privateProposal(proposal.payload),
   }));
   const hash = fingerprint({ ...input, proposals });
-  return db.transaction(async (tx) => {
+  const publish = async (tx: NetworkTx) => {
     const interview = await lockInterview(tx, userId, interviewId);
     if (!["active", "reviewing"].includes(interview.status))
       throw new NetworkError(
@@ -428,7 +429,8 @@ export async function publishInterviewGeneration(
       input.generationKey,
       assistant,
     );
-  });
+  };
+  return transaction ? publish(transaction) : db.transaction(publish);
 }
 async function getGeneration(
   tx: NetworkTx,

@@ -433,6 +433,12 @@ export const aiProcessingTasks = pgTable(
     priority: integer("priority").notNull().default(50),
     attempts: integer("attempts").notNull().default(0),
     model: text("model"),
+    sourceRevision: integer('source_revision'),
+    generationKey: uuid('generation_key'),
+    leaseToken: uuid('lease_token'),
+    leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }),
+    availableAt: timestamp('available_at', { withTimezone: true }).notNull().defaultNow(),
+    errorCategory: text('error_category'),
     errorMessage: text("error_message"),
     metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
     createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -836,9 +842,19 @@ export const networkSettings = pgTable("network_settings", {
   userId: text("user_id").primaryKey().references(() => user.id, { onDelete: "cascade" }),
   timezone: text("timezone").notNull().default("Asia/Shanghai"),
   cloudProcessingAllowed: boolean("cloud_processing_allowed").notNull().default(false),
+  aiConfigurationKey: text('ai_configuration_key'),
   draftingLanguage: text("drafting_language"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// Aggregate usage contains counts only. Reserving an attempt also counts crashed requests.
+export const networkAiUsage = pgTable('network_ai_usage', {
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  day: date('day').notNull(),
+  requests: integer('requests').notNull().default(0),
+  inputTokens: integer('input_tokens').notNull().default(0),
+  outputTokens: integer('output_tokens').notNull().default(0),
+}, (t) => [uniqueIndex('network_ai_usage_owner_day_uidx').on(t.userId, t.day)]);
 
 export const circles = pgTable("circles", {
   id: uuid("id").primaryKey().defaultRandom(),

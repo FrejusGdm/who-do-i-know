@@ -19,7 +19,7 @@ Implement the full Network OS PRD through M1–M6, including secure private work
 | --- | --- | --- |
 | M0: baseline and design | In progress | Repo and objective inspected; branch created; initial security patches committed; remaining dependency assessment before deployment |
 | M1: people, circles, interactions, cadence | In progress | Storage, owner-scoped routes and working People/Circles/Person/Today UI implemented; 17 unit tests, 8 PostgreSQL tests and full desktop/mobile browser flow passed; production build, type checking and lint passed |
-| M2: interviews and reviewed memory | In progress | Storage, authenticated API, capture/review UI and profile source links implemented; browser and database checks pass. Real provider/jobs, autosave, source correction and deletion remain |
+| M2: interviews and reviewed memory | In progress | Storage, authenticated API, capture/review UI and profile source links implemented; browser and database checks pass. Configured provider boundary and durable local worker implemented; live-provider verification, autosave, source correction and deletion remain |
 | M3: Today and reconnecting | In progress | Due queue derives state on read; open loops, preferences, personal updates and optional grounded drafts remain |
 | M4: cohort import and voice | Not started | Roster source/reconciliation, private audio/transcription |
 | M5: UI and data controls | In progress | Core workspace browser-tested; complete interview/voice UI and export/deletion/privacy remain |
@@ -36,7 +36,7 @@ Implement the full Network OS PRD through M1–M6, including secure private work
 
 ## Continuation
 
-Next: add the configured AI provider through durable revision-aware work with explicit processing consent, bounded requests and retry/cancellation checks. The capture/review UI and internal generation boundary are implemented; the app does not yet run a real AI interview. Add autosave, source correction/deletion and invalidation before claiming M2 complete. Keep reviewing and committing small verified slices. AWS credit coverage, domain and model configuration are deployment inputs; they do not block local work.
+Next: add server-backed interview draft autosave, then source correction/deletion and invalidation before claiming M2 complete. The configured AI boundary and durable local interview worker are implemented, but the real-provider smoke test is blocked by an HTTP 401 credential rejection. Do not retry unchanged credentials or treat synthetic provider tests as live verification. Keep reviewing and committing small verified slices. AWS credit coverage, domain and model configuration are deployment inputs; they do not block local work.
 
 ## Checkpoints
 
@@ -88,7 +88,7 @@ Remote database connections require a valid certificate chain. Set `DATABASE_CA_
 - Verified 20 unit tests and 14 PostgreSQL integration tests, type checking, lint and production build. No UI changed in this checkpoint. These are synthetic storage/provider-boundary fixtures, not a real AI-provider test. No live database, AWS resource or private record changed.
 - Remaining M2: HTTP routes, capture/review UI, configured provider with consent and bounded durable execution, source corrections/forgetting, and timeline provenance. Full M1–M6 goal remains active.
 
-## M2 capture and review workspace
+## M2 capture and review workspace — `a38e5c8`
 
 - Added owner-scoped interview list/create/read/status, turn-save and proposal-review routes; no public endpoint accepts model generations. Added Interviews navigation, Today capture link, desktop conversation/review columns and mobile view controls.
 - Capture preserves failed input in the open tab, resumes after reload, and supports pause/resume/finish. Review shows exact source quotes, unresolved-name selection, editable fields for all eight proposal types, sensitivity and explicit sharing choices, and separate accept/reject actions.
@@ -98,3 +98,15 @@ Remote database connections require a valid certificate chain. Set `DATABASE_CA_
 - Lint, production build and explicit typecheck passed. Final targeted browser rerun also passed (23.9 seconds including startup), including opening a source quote from mobile review and returning to the preserved edits. Exec session `78457` completed; no build/dev process from this checkpoint remains active.
 - This screen currently uses explicit Save, not autosave, and clearly states the AI provider is not connected. Browser model output comes only from synthetic test fixtures passed to the internal publication boundary. No real inference, production migration, deployment or outreach took place.
 - Next worker integration must not let the legacy `processQueuedAITasks` loop claim new interview jobs: it currently claims every queued task and has neither atomic leases nor source-revision validation. Reuse/extend the task storage deliberately, isolate execution by task type, and preserve the import flow while adding cancellation and consent checks. Do not silently use the old default model or fall back from local processing to cloud.
+
+
+## M2 configured interviewer and durable worker
+
+- Added explicit provider/model consent, fixed-endpoint OpenRouter requests, private routing parameters, bounded context/output/timeouts, disabled SDK logging, and sanitized errors. No implicit model or provider fallback. A working credential and explicit model setting remain operator inputs.
+- Extended the existing job table with revision-aware generation identity, atomic leases, delayed retries and cancellation. One in-flight request per owner, three attempts per request and forty reserved attempts per UTC day. Owner authorization and consent are rechecked before context collection and publication; archived/deleted inferred candidates also invalidate results even when no proposals are returned.
+- Generated turns/proposals, aggregate success-token counters and job completion commit atomically. Failed/crashed attempts count toward the daily cap. Legacy processing now filters its own task types. Added the separate `worker:network` process; SQS, ECS and durable legacy imports/files remain M6 work.
+- UI supports opt-in, automatic queueing after explicit recollection submission, manual questions, reload/poll recovery, visible failures and consent revocation. Queued HTTP requests return 202. No automatic contact outreach.
+- Migration `0007_hesitant_manta.sql` was reviewed and applied only to the disposable local database. Verified 23 unit tests and 20 PostgreSQL integration tests, including lease recovery, stale output, consent revocation, concurrent claims, daily limits and archive/deletion during inference. Type checking and lint passed.
+- All three browser workflows passed with test-only provider injection; desktop and 390px mobile interview screenshots were inspected. The targeted browser rerun passed (54.8 seconds including startup), including the final 202 response contract. The final production build passed after all backend and response-contract changes; its lint and type checks passed too.
+- Worker `--once` startup passed against the disposable database. Real-provider smoke testing sent only synthetic context and received HTTP 401. A request for a working credential was made; never put the key in chat or Git. No live schema/data migration, AWS provisioning or messages to contacts occurred.
+- Configuration, limits, recovery and verification commands are documented in `docs/NETWORK_OS_OPERATIONS.md`. Autosave and correction/forget workflows still remain; this is not full M2 completion.

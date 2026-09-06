@@ -50,6 +50,13 @@
       "when": 1788652356118,
       "tag": "0006_robust_marvex",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788654296010,
+      "tag": "0007_hesitant_manta",
+      "breakpoints": true
     }
   ]
 }

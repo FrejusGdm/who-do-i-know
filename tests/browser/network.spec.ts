@@ -11,6 +11,8 @@ import {
   publishInterviewGeneration,
   getInterview,
 } from "../../src/lib/network/interviews";
+import { runInterviewWorkerOnce, interviewJob } from '../../src/lib/network/interview-jobs';
+import { interviewOutput } from '../../src/lib/network/interview-provider';
 const origin = "http://127.0.0.1:3007";
 const owner = `browser-owner-${randomUUID()}`;
 const stranger = `browser-stranger-${randomUUID()}`;
@@ -424,4 +426,56 @@ test("interview capture, identity review, private memory and source links surviv
     `/api/interviews/${interviewId}`,
   );
   expect(privateRead.headers()["cache-control"]).toContain("no-store");
+});
+
+test('AI consent, durable generation, polling recovery and review work together without a real provider', async ({ page, context }) => {
+  process.env.NETWORK_INTERVIEW_MODEL = 'fixture/interviewer';
+  process.env.OPENROUTER_API_KEY = 'test-only-key-never-call-a-real-provider';
+  process.env.PRIVATE_USER_EMAILS = 'network-browser-owner@example.test';
+  const person = await createPerson(owner, { name: 'Morgan Worker Fixture' });
+  await page.goto('/interviews');
+  await page.getByLabel('Conversation title').fill('A worker-backed conversation');
+  await page.getByRole('button', { name: 'Start a conversation', exact: true }).click();
+  await expect(page).toHaveURL(/\/interviews\/[0-9a-f-]+$/);
+  const interviewId = page.url().split('/').pop()!;
+  const denied = await context.request.post(`/api/interviews/${interviewId}/generation`, { headers: { origin }, data: { requestKey: randomUUID(), revision: 1 } });
+  expect(denied.status()).toBe(409);
+  const controls = page.getByRole('region', { name: 'AI interviewer' });
+  await expect(controls.getByText('OpenRouter · fixture/interviewer')).toBeVisible();
+  await controls.getByRole('button', { name: 'Allow AI interviews with this provider' }).click();
+  await expect(controls.getByRole('button', { name: 'Turn AI off' })).toBeVisible();
+  await page.getByLabel('What would you like to remember?').fill('Morgan enjoys birdwatching.');
+  const queuedResponse = page.waitForResponse((response) => response.url().endsWith('/generation') && response.request().method() === 'POST');
+  await page.getByRole('button', { name: 'Save recollection' }).click();
+  expect((await queuedResponse).status()).toBe(202);
+  await expect(controls.getByText('Your request is saved and waiting for the interviewer. You can leave and return.')).toBeVisible();
+  await page.reload();
+  await expect(controls.getByText('Your request is saved and waiting for the interviewer. You can leave and return.')).toBeVisible();
+  await page.route('**/generation', (route) => route.request().method() === 'GET' ? route.abort() : route.continue());
+  await expect(controls.getByRole('alert')).toContainText('The connection was interrupted');
+  let calls = 0;
+  expect(await runInterviewWorkerOnce({ ownerId: owner, generate: async (input) => {
+    calls++;
+    const turn = input.turns.find((item) => item.role === 'user')!;
+    return { output: interviewOutput.parse({ assistant: 'What did Morgan say about birdwatching?', proposals: [{ payload: { kind: 'note', personId: person.id, body: 'Enjoys birdwatching' }, sources: [{ turnId: turn.id, revision: turn.revision, start: 0, end: turn.content.length, quote: turn.content }] }] }), inputTokens: 10, outputTokens: 20 };
+  } })).toBe(true);
+  expect(calls).toBe(1);
+  await page.unroute('**/generation');
+  await controls.getByRole('button', { name: 'Check for the answer' }).click();
+  await expect(page.getByText('What did Morgan say about birdwatching?', { exact: true })).toBeVisible();
+  const card = page.getByRole('article', { name: 'Private note suggestion' });
+  await card.getByLabel('I have checked the identity above').check();
+  await card.getByRole('button', { name: 'Save this memory' }).click();
+  await expect(card.getByText('Saved to your notebook. No message was sent.')).toBeVisible();
+  await captureBoth(page, 'interview-ai');
+  await page.getByLabel('What would you like to remember?').fill('I would like to ask about a local walk.');
+  await page.getByRole('button', { name: 'Save recollection' }).click();
+  await expect(controls.getByText('Your request is saved and waiting for the interviewer. You can leave and return.')).toBeVisible();
+  await controls.getByRole('button', { name: 'Turn AI off' }).click();
+  await expect(controls.getByRole('button', { name: 'Allow AI interviews with this provider' })).toBeVisible();
+  expect((await interviewJob(owner, interviewId))!.status).toBe('canceled');
+  expect(await runInterviewWorkerOnce({ ownerId: owner, generate: async () => { throw new Error('Canceled jobs must not call a provider'); } })).toBe(false);
+  await page.reload();
+  await expect(controls.getByRole('button', { name: 'Allow AI interviews with this provider' })).toBeVisible();
+  await expect(page.getByText('I would like to ask about a local walk.', { exact: true })).toBeVisible();
 });

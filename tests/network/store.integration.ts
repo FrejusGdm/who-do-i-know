@@ -322,3 +322,147 @@ test('stale plan edits and foreign circles roll back review; sensitive context c
   assert.equal(rejected.status, 'rejected');
   assert.equal((await reviewMemoryProposal(owner, interview.id, proposals[0].id, { revision: 1, action: 'reject' })).revision, rejected.revision);
 });
+
+async function enableInterviewAI() {
+  process.env.NETWORK_INTERVIEW_MODEL = 'fixture/interviewer';
+  process.env.OPENROUTER_API_KEY = 'test-only-key';
+  const { interviewProviderConfig } = await import('../../src/lib/network/interview-provider');
+  const { setInterviewAIConsent } = await import('../../src/lib/network/interview-jobs');
+  return setInterviewAIConsent(owner, { allowed: true, configurationKey: interviewProviderConfig()!.configurationKey });
+}
+async function fixtureReply() {
+  const { interviewOutput } = await import('../../src/lib/network/interview-provider');
+  return { output: interviewOutput.parse({ assistant: 'What would you like to remember next?', proposals: [] }), inputTokens: 10, outputTokens: 8 };
+}
+
+test('AI consent is configuration-bound and concurrent workers claim one retry-safe request per owner', async () => {
+  const { queueInterview, claimInterviewJob, finishInterviewJob, interviewAIStatus, setInterviewAIConsent, interviewJobContext } = await import('../../src/lib/network/interview-jobs');
+  const { interview, source } = await interviewFixture();
+  await assert.rejects(() => queueInterview(owner, interview.id, { requestKey: randomUUID(), revision: interview.revision }), conflict);
+  const status = await enableInterviewAI(); assert.equal(status.allowed, true);
+  await assert.rejects(() => setInterviewAIConsent(owner, { allowed: true, configurationKey: 'a'.repeat(64) }), conflict);
+  const command = { requestKey: randomUUID(), revision: interview.revision };
+  const [first, retry] = await Promise.all([queueInterview(owner, interview.id, command), queueInterview(owner, interview.id, command)]);
+  assert.equal(first!.id, retry!.id);
+  const claims = await Promise.all([claimInterviewJob(owner), claimInterviewJob(owner)]);
+  assert.equal(claims.filter(Boolean).length, 1);
+  const claim = claims.find(Boolean)!;
+  const context = await interviewJobContext(claim);
+  assert.equal(context.turns[0].id, source.turnId);
+  assert.equal(context.turns[0].content, source.quote);
+  assert.equal(context.people.some((person) => person.name === 'Foreign destination fixture'), false);
+  assert.equal(await finishInterviewJob(claim, await fixtureReply()), true);
+  assert.equal(await finishInterviewJob(claim, await fixtureReply()), false);
+  assert.equal((await interviewAIStatus(owner)).requestsToday, 1);
+});
+
+test('an expired worker lease can be reclaimed and a superseded worker cannot publish', async () => {
+  const { aiProcessingTasks } = await import('../../src/db/schema');
+  const { queueInterview, claimInterviewJob, finishInterviewJob } = await import('../../src/lib/network/interview-jobs');
+  const { getInterview } = await import('../../src/lib/network/interviews');
+  await enableInterviewAI();
+  const { interview } = await interviewFixture();
+  await queueInterview(owner, interview.id, { requestKey: randomUUID(), revision: interview.revision });
+  const crashed = (await claimInterviewJob(owner))!;
+  await db.update(aiProcessingTasks).set({ leaseExpiresAt: new Date(Date.now() - 1000) }).where(eq(aiProcessingTasks.id, crashed.id));
+  const recovered = (await claimInterviewJob(owner))!;
+  assert.notEqual(crashed.leaseToken, recovered.leaseToken); assert.equal(recovered.attempts, 2);
+  assert.equal(await finishInterviewJob(crashed, await fixtureReply()), false);
+  assert.equal(await finishInterviewJob(recovered, await fixtureReply()), true);
+  assert.equal((await getInterview(owner, interview.id)).turns.filter((turn) => turn.role === 'assistant').length, 1);
+});
+
+test('revoking consent during inference cancels publication and never silently re-enables processing', async () => {
+  const { queueInterview, runInterviewWorkerOnce, setInterviewAIConsent, interviewJob, interviewAIStatus } = await import('../../src/lib/network/interview-jobs');
+  const { getInterview } = await import('../../src/lib/network/interviews');
+  await enableInterviewAI(); const { interview } = await interviewFixture();
+  await queueInterview(owner, interview.id, { requestKey: randomUUID(), revision: interview.revision });
+  let started!: () => void; let release!: () => void;
+  const begun = new Promise<void>((resolve) => { started = resolve; });
+  const finish = new Promise<void>((resolve) => { release = resolve; });
+  const running = runInterviewWorkerOnce({ ownerId: owner, generate: async () => { started(); await finish; return fixtureReply(); } });
+  await begun;
+  await setInterviewAIConsent(owner, { allowed: false, configurationKey: null });
+  release(); await running;
+  assert.equal((await getInterview(owner, interview.id)).turns.length, 1);
+  assert.equal((await interviewJob(owner, interview.id))!.status, 'canceled');
+  assert.equal((await interviewAIStatus(owner)).allowed, false);
+  await assert.rejects(() => queueInterview(owner, interview.id, { requestKey: randomUUID(), revision: interview.revision }), conflict);
+});
+
+test('new words, archive and source deletion invalidate an in-flight answer, including answers without proposals', async () => {
+  const { queueInterview, claimInterviewJob, finishInterviewJob, runInterviewWorkerOnce } = await import('../../src/lib/network/interview-jobs');
+  const { appendInterviewTurn, getInterview } = await import('../../src/lib/network/interviews');
+  const { interviews: interviewTable, aiProcessingTasks } = await import('../../src/db/schema');
+  await enableInterviewAI();
+  const { interview } = await interviewFixture();
+  await queueInterview(owner, interview.id, { requestKey: randomUUID(), revision: interview.revision });
+  const old = (await claimInterviewJob(owner))!;
+  await appendInterviewTurn(owner, interview.id, { requestKey: randomUUID(), revision: interview.revision, content: 'Newer words must take precedence.' });
+  assert.equal(await finishInterviewJob(old, await fixtureReply()), false);
+  assert.equal((await getInterview(owner, interview.id)).turns.length, 2);
+  const person = await createPerson(owner, { name: 'Archive worker fixture' });
+  const archivedFixture = await interviewFixture([person.id]);
+  await queueInterview(owner, archivedFixture.interview.id, { requestKey: randomUUID(), revision: archivedFixture.interview.revision });
+  await runInterviewWorkerOnce({ ownerId: owner, generate: async () => {
+    await db.update(people).set({ archivedAt: new Date(), reviewStatus: 'archived' }).where(eq(people.id, person.id));
+    return fixtureReply();
+  } });
+  assert.equal((await getInterview(owner, archivedFixture.interview.id)).turns.length, 1);
+  const candidate = await createPerson(owner, { name: 'Candidate Archive Fixture' });
+  const candidateFixture = await interviewFixture([], 'Candidate and I discussed a shared interest.');
+  await queueInterview(owner, candidateFixture.interview.id, { requestKey: randomUUID(), revision: candidateFixture.interview.revision });
+  await runInterviewWorkerOnce({ ownerId: owner, generate: async (context) => {
+    assert.ok(context.people.some((person) => person.id === candidate.id && !person.selected));
+    await db.update(people).set({ archivedAt: new Date(), reviewStatus: 'archived' }).where(eq(people.id, candidate.id));
+    return fixtureReply();
+  } });
+  assert.equal((await getInterview(owner, candidateFixture.interview.id)).turns.length, 1);
+  const deleted = await interviewFixture();
+  await queueInterview(owner, deleted.interview.id, { requestKey: randomUUID(), revision: deleted.interview.revision });
+  const deletedJob = (await claimInterviewJob(owner))!;
+  await db.delete(interviewTable).where(eq(interviewTable.id, deleted.interview.id));
+  assert.equal(await finishInterviewJob(deletedJob, await fixtureReply()), false);
+  const [canceled] = await db.select().from(aiProcessingTasks).where(eq(aiProcessingTasks.id, deletedJob.id));
+  assert.equal(canceled.status, 'canceled');
+});
+
+test('provider failure is sanitized, backoff is respected and attempts are bounded', async () => {
+  const { queueInterview, runInterviewWorkerOnce, interviewJob } = await import('../../src/lib/network/interview-jobs');
+  const { InterviewProviderError } = await import('../../src/lib/network/interview-provider');
+  const { aiProcessingTasks } = await import('../../src/db/schema');
+  await enableInterviewAI(); const { interview } = await interviewFixture();
+  await queueInterview(owner, interview.id, { requestKey: randomUUID(), revision: interview.revision });
+  let calls = 0;
+  const generate = async () => { calls++; throw new InterviewProviderError('timeout'); };
+  assert.equal(await runInterviewWorkerOnce({ ownerId: owner, generate }), true);
+  assert.equal(await runInterviewWorkerOnce({ ownerId: owner, generate }), false);
+  for (let retry = 0; retry < 2; retry++) {
+    const job = (await interviewJob(owner, interview.id))!;
+    await db.update(aiProcessingTasks).set({ availableAt: new Date(Date.now() - 1000) }).where(eq(aiProcessingTasks.id, job.id));
+    await runInterviewWorkerOnce({ ownerId: owner, generate });
+  }
+  const job = (await interviewJob(owner, interview.id))!;
+  assert.equal(calls, 3); assert.equal(job.status, 'failed'); assert.equal(job.errorCategory, 'timeout');
+  const [stored] = await db.select().from(aiProcessingTasks).where(eq(aiProcessingTasks.id, job.id));
+  assert.equal(stored.errorMessage, null); assert.equal(stored.leaseToken, null);
+});
+
+test('daily usage remains bounded across explicit retries and changed configuration requires fresh consent', async () => {
+  const { queueInterview, runInterviewWorkerOnce, interviewJob, interviewAIStatus } = await import('../../src/lib/network/interview-jobs');
+  const { networkAiUsage } = await import('../../src/db/schema');
+  const { INTERVIEW_LIMITS } = await import('../../src/lib/network/interview-provider');
+  await enableInterviewAI(); const { interview } = await interviewFixture();
+  process.env.NETWORK_INTERVIEW_MODEL = 'fixture/changed';
+  assert.equal((await interviewAIStatus(owner)).allowed, false);
+  await assert.rejects(() => queueInterview(owner, interview.id, { requestKey: randomUUID(), revision: interview.revision }), conflict);
+  await enableInterviewAI();
+  await db.update(networkAiUsage).set({ requests: INTERVIEW_LIMITS.dailyRequests }).where(and(eq(networkAiUsage.userId, owner), eq(networkAiUsage.day, new Date().toISOString().slice(0, 10))));
+  let calls = 0;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await queueInterview(owner, interview.id, { requestKey: randomUUID(), revision: interview.revision });
+    await runInterviewWorkerOnce({ ownerId: owner, generate: async () => { calls++; return fixtureReply(); } });
+    assert.equal((await interviewJob(owner, interview.id))!.errorCategory, 'daily_limit');
+  }
+  assert.equal(calls, 0); assert.equal((await interviewAIStatus(owner)).requestsToday, INTERVIEW_LIMITS.dailyRequests);
+});

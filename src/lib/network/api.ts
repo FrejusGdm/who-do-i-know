@@ -7,6 +7,7 @@ import { NetworkError } from "./store";
 export async function networkResponse(
   request: Request,
   action: (userId: string) => Promise<unknown>,
+  successStatus: 200 | 201 | 202 = 200,
 ) {
   try {
     const { session, error } = await requireSession();
@@ -19,6 +20,7 @@ export async function networkResponse(
     if (!isTrustedMutation(request, origin))
       throw new RequestError(403, "Untrusted request origin");
     return NextResponse.json(await action(session.user.id), {
+      status: successStatus,
       headers: { "Cache-Control": "private, no-store" },
     });
   } catch (error) {

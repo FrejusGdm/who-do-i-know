@@ -17,6 +17,7 @@ import type { BYOKProvider } from "@/types";
 
 type AIMode = "cloud" | "byok" | "local";
 type AITaskType = "thread_summarizer" | "person_summarizer" | "mentor_signal_reviewer";
+const LEGACY_TASK_TYPES: AITaskType[] = ['thread_summarizer', 'person_summarizer', 'mentor_signal_reviewer'];
 
 interface ProcessorOptions {
   userId: string;
@@ -183,7 +184,7 @@ export async function processQueuedAITasks({
     const [task] = await db
       .select()
       .from(aiProcessingTasks)
-      .where(and(eq(aiProcessingTasks.userId, userId), eq(aiProcessingTasks.status, "queued")))
+      .where(and(eq(aiProcessingTasks.userId, userId), eq(aiProcessingTasks.status, "queued"), inArray(aiProcessingTasks.taskType, LEGACY_TASK_TYPES)))
       .orderBy(desc(aiProcessingTasks.priority), aiProcessingTasks.createdAt)
       .limit(1);
 
@@ -232,7 +233,7 @@ export async function processQueuedAITasks({
   const remaining = await db
     .select()
     .from(aiProcessingTasks)
-    .where(and(eq(aiProcessingTasks.userId, userId), eq(aiProcessingTasks.status, "queued")));
+    .where(and(eq(aiProcessingTasks.userId, userId), eq(aiProcessingTasks.status, "queued"), inArray(aiProcessingTasks.taskType, LEGACY_TASK_TYPES)));
 
   return { completed, failed, remaining: remaining.length };
 }

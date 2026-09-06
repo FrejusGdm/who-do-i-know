@@ -30,6 +30,8 @@ const child = spawn(
       PRIVATE_USER_EMAILS: "network-browser-owner@example.test",
       GOOGLE_CLIENT_ID: "browser-test-id",
       GOOGLE_CLIENT_SECRET: "browser-test-secret",
+      NETWORK_INTERVIEW_MODEL: 'fixture/interviewer',
+      OPENROUTER_API_KEY: 'test-only-key-never-call-a-real-provider',
     },
   },
 );

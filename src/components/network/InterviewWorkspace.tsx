@@ -1,12 +1,18 @@
 "use client";
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { interviews, interviewTurns } from "@/db/schema";
 import { cn } from "@/lib/utils";
 import { buttonClass, fieldClass, secondaryButtonClass } from "./NetworkShell";
 import { SaveFeedback, useNetworkMutation } from "./useNetworkMutation";
 import { ProposalReview, type ProposalView } from "./ProposalReview";
 import type { PersonOption } from "./PersonPicker";
+import type {
+  InterviewAIStatus,
+  InterviewJobView,
+} from "@/lib/network/interview-jobs";
+import { useInterviewAI } from "./useInterviewAI";
+import { InterviewAIControls } from "./InterviewAIControls";
 type InterviewState = Pick<
   typeof interviews.$inferSelect,
   "id" | "title" | "status" | "revision"
@@ -15,10 +21,17 @@ type TurnView = Pick<
   typeof interviewTurns.$inferSelect,
   "id" | "role" | "content" | "ordinal" | "revision"
 >;
+export type InterviewSnapshot = {
+  interview: InterviewState;
+  turns: TurnView[];
+  proposals: ProposalView[];
+};
 export function InterviewWorkspace({
   initial,
   people,
   circles,
+  initialAI,
+  initialJob,
 }: {
   initial: {
     interview: InterviewState;
@@ -27,6 +40,8 @@ export function InterviewWorkspace({
   };
   people: PersonOption[];
   circles: { id: string; name: string }[];
+  initialAI: InterviewAIStatus;
+  initialJob: InterviewJobView | null;
 }) {
   const [interview, setInterview] = useState(initial.interview);
   const [turns, setTurns] = useState(initial.turns);
@@ -34,6 +49,25 @@ export function InterviewWorkspace({
   const [content, setContent] = useState("");
   const [view, setView] = useState<"conversation" | "review">("conversation");
   const [saved, setSaved] = useState(false);
+  const latestRevision = useRef(initial.interview.revision);
+  const receiveSnapshot = useCallback((snapshot: InterviewSnapshot) => {
+    if (snapshot.interview.revision < latestRevision.current) return;
+    latestRevision.current = snapshot.interview.revision;
+    setInterview(snapshot.interview);
+    setTurns(snapshot.turns);
+    setProposals((current) =>
+      snapshot.proposals.map((proposal) => {
+        const local = current.find((item) => item.id === proposal.id);
+        return local && local.revision > proposal.revision ? local : proposal;
+      }),
+    );
+  }, []);
+  const ai = useInterviewAI({
+    id: initial.interview.id,
+    initialStatus: initialAI,
+    initialJob,
+    onSnapshot: receiveSnapshot,
+  });
   const turnMutation = useNetworkMutation();
   const statusMutation = useNetworkMutation();
   const request = useRef<{
@@ -51,7 +85,10 @@ export function InterviewWorkspace({
       "PATCH",
       { revision: interview.revision, status },
     );
-    if (result) setInterview(result.interview);
+    if (result) {
+      latestRevision.current = result.interview.revision;
+      setInterview(result.interview);
+    }
   }
   return (
     <div className="space-y-6">
@@ -135,11 +172,12 @@ export function InterviewWorkspace({
               to lose. Uncertain dates can stay uncertain.
             </p>
           </div>
-          <div className="rounded-lg border border-[#deded5] bg-white p-4 text-sm leading-6 text-[#62685e]">
-            AI conversation is not connected yet. Your entries save privately,
-            and manual notes and reminders remain available. No text from this
-            screen is sent to an AI provider.
-          </div>
+          <InterviewAIControls
+            ai={ai}
+            revision={interview.revision}
+            writable={writable}
+            unsaved={!!content.trim()}
+          />
           {!turns.length && (
             <p className="rounded-lg border border-dashed border-[#deded5] p-6 text-pretty leading-7 text-[#62685e]">
               Nothing saved yet. Write what comes to mind below; you do not need
@@ -192,6 +230,7 @@ export function InterviewWorkspace({
                   content: words,
                 });
                 if (result) {
+                  latestRevision.current = result.interview.revision;
                   setInterview(result.interview);
                   setTurns((current) =>
                     current.some((turn) => turn.id === result.turn.id)
@@ -203,6 +242,7 @@ export function InterviewWorkspace({
                   );
                   setSaved(true);
                   request.current = null;
+                  if (ai.status.allowed) void ai.ask(result.interview.revision);
                 }
               }}
             >
