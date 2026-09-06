@@ -16,6 +16,10 @@ if (app.node.tryGetContext("artifactsOnly") !== "true") {
     certificateArn: app.node.tryGetContext("certificateArn"),
     secretArn: app.node.tryGetContext("secretArn"),
     imageTag: app.node.tryGetContext("imageTag"),
+    cloudFrontPrefixListId: app.node.tryGetContext("cloudFrontPrefixListId"),
+    startServices: app.node.tryGetContext("startServices") !== "false",
   });
-  new NetworkStack(app, "NetworkOs", config, artifacts.repository);
+  new NetworkStack(app, "NetworkOs", config, "network-os").addDependency(
+    artifacts,
+  );
 }
