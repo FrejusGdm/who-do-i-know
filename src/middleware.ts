@@ -25,6 +25,11 @@ export function middleware(request: NextRequest) {
   if (!isTrustedMutation(request, configuredOrigin)) {
     return NextResponse.json({ error: "Untrusted request origin" }, { status: 403 });
   }
+  if (pathname === "/api/owner-setup" && request.method === "POST") {
+    const response = NextResponse.next();
+    response.headers.set("Cache-Control", "private, no-store");
+    return response;
+  }
   const token = request.cookies.get("__Secure-better-auth.session_token")?.value ?? request.cookies.get("better-auth.session_token")?.value;
   if (!token) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

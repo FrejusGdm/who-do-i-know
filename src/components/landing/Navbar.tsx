@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { signIn, useSession } from "@/lib/auth-client";
+import { useSession } from "@/lib/auth-client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -16,10 +16,7 @@ export function Navbar() {
       return;
     }
 
-    signIn.social({
-      provider: "google",
-      callbackURL: "/dashboard",
-    });
+    router.push("/login");
   };
 
   return (

@@ -1,5 +1,7 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { username } from "better-auth/plugins/username";
+import { validUsername } from "./password-setup";
 import { nextCookies } from "better-auth/next-js";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
@@ -14,22 +16,15 @@ function createAuth() {
       process.env.BETTER_AUTH_SECRET ??
       "development-only-secret-change-me-before-production",
     database: drizzleAdapter(db, { provider: "pg", schema }),
-    socialProviders: {
-      google: {
-        clientId: process.env.GOOGLE_CLIENT_ID ?? "missing-google-client-id",
-        clientSecret:
-          process.env.GOOGLE_CLIENT_SECRET ?? "missing-google-client-secret",
-        scope: [
-          "openid",
-          "email",
-          "profile",
-          "https://www.googleapis.com/auth/gmail.readonly",
-          "https://www.googleapis.com/auth/contacts.readonly",
-        ],
-        accessType: "offline",
-        prompt: "consent",
-      },
+    emailAndPassword: {
+      enabled: true,
+      disableSignUp: true,
+      requireEmailVerification: true,
+      minPasswordLength: 12,
+      maxPasswordLength: 128,
     },
+    logger: { disabled: true },
+    rateLimit: { enabled: true, storage: "database", window: 60, max: 60 },
     session: {
       expiresIn: 60 * 60 * 24 * 7,
       updateAge: 60 * 60 * 24,
@@ -46,7 +41,7 @@ function createAuth() {
         return { data: candidate };
       } } },
     },
-    plugins: [nextCookies()],
+    plugins: [username({ minUsernameLength: 3, maxUsernameLength: 30, usernameValidator: validUsername }), nextCookies()],
   });
 }
 

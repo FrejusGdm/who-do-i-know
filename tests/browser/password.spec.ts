@@ -1,0 +1,32 @@
+import { test, expect } from "@playwright/test";
+import { randomBytes, randomUUID, createHash } from "node:crypto";
+import { eq } from "drizzle-orm";
+import { db, closeDatabase } from "../../src/db";
+import { user, ownerSetupTokens, rateLimit } from "../../src/db/schema";
+const url = process.env.TEST_DATABASE_URL;
+if (!url || !["localhost","127.0.0.1"].includes(new URL(url).hostname) || !new URL(url).pathname.endsWith("_test")) throw new Error("Local test database required");
+Object.assign(process.env,{DATABASE_URL:url,NODE_ENV:"test"});
+const id = randomUUID();
+const token = randomBytes(32).toString("hex");
+test.beforeAll(async()=>{
+  await db.insert(user).values({id,name:"Browser owner",email:"network-browser-owner@example.test",emailVerified:true});
+  await db.insert(ownerSetupTokens).values({userId:id,tokenHash:createHash("sha256").update(token).digest("hex"),expiresAt:new Date(Date.now()+600000)});
+  await db.delete(rateLimit);
+});
+test.afterAll(async()=>{await db.delete(user).where(eq(user.id,id));await db.delete(rateLimit);await closeDatabase();});
+test("owner chooses password and signs in using the app origin",async({page})=>{
+  await page.goto(`/setup#${token}`);
+  await expect(page).toHaveURL(/\/setup$/);
+  await page.getByLabel("Username",{exact:true}).fill("browser_owner");
+  await page.getByLabel("Password",{exact:true}).fill("Private browser password 782!");
+  await page.getByLabel("Confirm password").fill("Private browser password 782!");
+  await page.getByRole("button",{name:"Create my account"}).click();
+  await expect(page.getByRole("heading",{name:"You’re ready."})).toBeVisible();
+  await page.getByRole("link",{name:"Continue to sign in"}).click();
+  await page.getByLabel("Username",{exact:true}).fill("browser_owner");
+  await page.getByLabel("Password",{exact:true}).fill("Private browser password 782!");
+  await page.getByRole("button",{name:"Sign in",exact:true}).click();
+  await expect(page).toHaveURL(/\/dashboard/);
+  await page.goto("/today");
+  await expect(page).not.toHaveURL(/\/login/);
+});

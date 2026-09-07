@@ -12,5 +12,4 @@ export function productionAuthConfiguration(env: Record<string, string | undefin
   const url = env.BETTER_AUTH_URL ? new URL(env.BETTER_AUTH_URL) : null;
   if (!url || url.protocol !== "https:") throw new Error("BETTER_AUTH_URL must use HTTPS in production");
   if (!(env.PRIVATE_USER_EMAILS ?? env.PRIVATE_USER_EMAIL)?.trim()) throw new Error("Configure the private owner allowlist before starting production");
-  if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) throw new Error("Google sign-in is not configured");
 }

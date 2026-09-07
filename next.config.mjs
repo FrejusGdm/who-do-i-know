@@ -7,6 +7,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const nextConfig = {
   output: "standalone",
   outputFileTracingRoot: __dirname,
+  // Local mailbox data must never be copied into a standalone server bundle.
+  outputFileTracingExcludes: {
+    "/*": ["./google-archives/**/*", "./linkedin-dump/**/*", "./exports/**/*", "./notes/**/*", "./.env*", "./.git/**/*", "./.codex/**/*", "./.agents/**/*", "./.claude/**/*", "./tests/fixtures/**/*", "./public/demo-whoYouKnow.mp4"],
+  },
   images: {
     remotePatterns: [
       {
@@ -33,6 +37,10 @@ const nextConfig = {
           },
         ],
       },
+      { source: "/setup", headers: [
+        { key: "Referrer-Policy", value: "no-referrer" },
+        { key: "Cache-Control", value: "private, no-store" },
+      ] },
     ];
   },
 };

@@ -9,7 +9,7 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test tests/network/*.test.ts",
-    "test:integration": "node --import tsx --test tests/network/*.integration.ts",
+    "test:integration": "node --import tsx --test --test-concurrency=1 tests/network/*.integration.ts",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:generate": "drizzle-kit generate",

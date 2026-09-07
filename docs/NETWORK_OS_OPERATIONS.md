@@ -90,3 +90,14 @@ Migration `0011_conversation_preferences.sql` adds owner/person-scoped preferenc
 Migration `0012_personal_update_controls.sql` adds deletion tombstones and hash-only request receipts. Removal clears title, body, date and audience; original interview words remain. Source correction still removes its materialized update completely, while receipts prevent old requests from recreating it. Edits/removal invalidate unfinished originating interview work; its reviewed summaries use current update text or a removed marker. Shared interview invalidation now lives in `src/lib/network/interview-invalidation.ts`.
 
 Draft generation must track each selected update's revision, person/circle audience and circle membership. Changing or removing any of those must invalidate dependent draft output, including output already stored. Do not implement this solely as an instruction to the model.
+
+
+## Private username/password access
+
+Set `PRIVATE_USER_EMAILS` in the runtime secret to the administratively verified owner address. Keep it out of source control. Apply migration 0013 before deploying password auth. Google client credentials are no longer required for app sign-in. Email access requires a separate mailbox authorization workflow.
+
+To create an initial account invitation, securely provide the deployed `DATABASE_URL`, `PRIVATE_USER_EMAILS` (exactly one owner), and HTTPS `BETTER_AUTH_URL` to `node scripts/issue-owner-setup.mjs /private/tmp/<new-private-file>.json`. The script uses Neon HTTPS for the currently deployed database. It administratively provisions the confirmed owner if absent, rejects an existing credential, and rotates the current invitation under an owner-row lock. Its private output file contains a one-hour link. Never run this in public CI, commit the output, or disclose the link outside the owner’s private channel. The owner chooses their username and password in the app; passwords never pass through the operator or chat.
+
+Setup removes the invitation fragment from browser history and consumes its hash in the same transaction as credential creation. A lost acknowledgment can be recovered by trying the chosen login. An expired unused invitation can be replaced by running the administrator command again. Existing credentials cannot be reset with this tool. Password changes require an authenticated session through BetterAuth; public email reset is disabled until a verified recovery process exists.
+
+Password login uses same-origin browser requests. Public signup/social/linking routes are blocked, verified allowlisted identity is checked again on session creation and private reads, and both setup and login have database-backed global attempt limits. This single-owner limit deliberately ignores client-supplied IP headers.

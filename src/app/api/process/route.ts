@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
       job.providerMode as LLMProviderMode,
       byokApiKey,
       ollamaModel
-    ).catch((e) => console.error("Pipeline error:"));
+    ).catch(() => console.error("Pipeline error:"));
 
     return NextResponse.json({ status: "processing", jobId });
   } catch {

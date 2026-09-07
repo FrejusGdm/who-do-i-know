@@ -2,7 +2,7 @@
 
 ## Objective and completion criteria
 
-Implement the full Network OS PRD through M1–M6, including secure private workflows, polished responsive UI, durable jobs/files, verified AWS deployment and a tested RDS migration (or an explicitly documented deployment exception). A successful local build alone is not completion. No messages may be sent to contacts. Local commits and an explicit branch push are authorized; the owner requested push/deploy on 2026-09-06. No merge into main.
+Implement the full Network OS PRD through M1–M6, including secure private workflows, polished responsive UI, durable jobs/files, verified AWS deployment and a tested RDS migration (or an explicitly documented deployment exception). A successful local build alone is not completion. No messages may be sent to contacts. Local commits and an explicit branch push are authorized; the owner requested push/deploy on 2026-09-06. The owner explicitly authorized merging into main on 2026-09-07.
 
 ## Baseline — 2026-09-06
 
@@ -247,3 +247,12 @@ Both final ECS deployments now report COMPLETED at one running task each. The re
 NetworkOs CloudFormation reached UPDATE_COMPLETE after the final 104bddd rollout. Both ECS deployments report COMPLETED, one running task each. Live URL: https://d3p6ii3tjocl55.cloudfront.net . Default CloudFront HTTPS works without a purchased/custom domain. Release commit 104bddd is pushed; no main merge. Final build, live HTTP/auth boundary checks, native DB TLS/migration check and desktop/mobile inspection passed within the limitations above. Infrastructure and dependency scan exceptions remain documented, not silently waived or described as a clean scan.
 
 Exact next action after handoff: obtain the owner's chosen Google email; have the owner reauthenticate at the existing Google Cloud Console verification page; add the exact CloudFront JavaScript origin and /api/auth/callback/google redirect URI to the existing client, preserving all prior callbacks; set only that allowlist identity in the runtime secret and roll web tasks; verify real owner sign-in and non-owner denial. Then pursue the separately requested mailbox connection after the owner has seen the deployed app. AI remains disabled pending valid configuration. Do not infer an owner, fetch mail early, send messages, delete personal files, or mark M1–M6 complete.
+
+
+## Password access — 2026-09-07
+
+The owner chose username/password app access and confirmed the private owner identity outside the repository. Google OAuth is no longer an app login prerequisite. New credentials are provisioned through an administrator-issued, one-hour, single-use invitation bound to an allowed, verified owner. Passwords use BetterAuth scrypt; signup, social login, account linking and public reset endpoints are closed. Login/setup attempts use durable database rate limits. Mailbox authorization remains separate and has not been implemented as a new connector in this change.
+
+The public branch history was scanned for known local secret values, common credential patterns, contact exports and private notes. No matched secrets or private contact files were found in published history. Published project documentation includes personal and infrastructure context; this is not a claim that the repository is anonymous. Local-only personal files and capture refs are excluded from the push and build artifact.
+
+Archive/legacy pipeline errors now use fixed log and response messages so database parameters and imported text are not exposed in errors. No private owner address, setup invitation or password is committed.

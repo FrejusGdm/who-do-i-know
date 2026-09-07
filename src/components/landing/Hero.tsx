@@ -4,7 +4,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { HeroBackground } from "./HeroBackground";
-import { signIn, useSession } from "@/lib/auth-client";
+import { useSession } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 
 export function Hero() {
@@ -19,10 +19,7 @@ export function Hero() {
     }
 
     setIsLoading(true);
-    signIn.social({
-      provider: "google",
-      callbackURL: "/dashboard",
-    });
+    router.push("/login");
   };
 
   const text1 = "You spent years meeting people.";
