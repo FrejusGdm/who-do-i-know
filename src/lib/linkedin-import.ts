@@ -449,7 +449,7 @@ export async function importLinkedInArchive({
         metadata: {
           sourceLabel,
           archiveSha256,
-          errorMessage: error instanceof Error ? error.message : "Unknown LinkedIn import error",
+          errorMessage: "LinkedIn import failed",
         },
       })
       .where(eq(imports.id, importRow.id));

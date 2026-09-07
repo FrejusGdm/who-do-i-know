@@ -150,7 +150,7 @@ export async function PATCH(
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Invalid person update", issues: error.issues }, { status: 400 });
     }
-    console.error("Update person error:", error);
+    console.error("Update person error:");
     return NextResponse.json({ error: "Failed to update person" }, { status: 500 });
   }
 }

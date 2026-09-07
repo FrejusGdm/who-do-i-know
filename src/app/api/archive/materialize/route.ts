@@ -14,10 +14,10 @@ export async function POST() {
 
     const stats = await materializeArchiveMemory(session.user.id);
     return NextResponse.json({ stats });
-  } catch (error) {
-    console.error("Archive materialize error:", error);
+  } catch {
+    console.error("Archive materialize error:");
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to build people from archive" },
+      { error: "Failed to build people from archive" },
       { status: 500 },
     );
   }

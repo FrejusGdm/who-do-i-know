@@ -12,10 +12,10 @@ export async function POST() {
 
     const job = await estimateGoogleArchive(session.user.id);
     return NextResponse.json({ job });
-  } catch (error) {
-    console.error("Google archive estimate error:", error);
+  } catch {
+    console.error("Google archive estimate error:");
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to estimate Google archive" },
+      { error: "Failed to estimate Google archive" },
       { status: 500 },
     );
   }

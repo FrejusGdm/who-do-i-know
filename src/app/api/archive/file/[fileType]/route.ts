@@ -70,8 +70,8 @@ export async function GET(
         "Content-Disposition": `attachment; filename="${file.filename}"`,
       },
     });
-  } catch (error) {
-    console.error("Google archive file download error:", error);
+  } catch {
+    console.error("Google archive file download error:");
     return NextResponse.json({ error: "Failed to download archive file" }, { status: 500 });
   }
 }

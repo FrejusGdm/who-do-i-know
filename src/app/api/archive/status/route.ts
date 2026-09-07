@@ -11,8 +11,8 @@ export async function GET() {
 
     const job = await getLatestArchiveJob(session.user.id);
     return NextResponse.json({ job });
-  } catch (error) {
-    console.error("Google archive status error:", error);
+  } catch {
+    console.error("Google archive status error:");
     return NextResponse.json({ error: "Failed to load archive status" }, { status: 500 });
   }
 }

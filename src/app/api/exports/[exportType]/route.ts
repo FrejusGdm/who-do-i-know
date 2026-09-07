@@ -59,8 +59,8 @@ export async function GET(
         "Content-Disposition": `attachment; filename="${exportType}.csv"`,
       },
     });
-  } catch (error) {
-    console.error("CSV export error:", error);
+  } catch {
+    console.error("CSV export error:");
     return NextResponse.json({ error: "Failed to export CSV" }, { status: 500 });
   }
 }

@@ -101,8 +101,8 @@ export async function PATCH(
     }
 
     return NextResponse.json({ task });
-  } catch (error) {
-    console.error("Update outreach task error:", error);
+  } catch {
+    console.error("Update outreach task error:");
     return NextResponse.json({ error: "Failed to update outreach task" }, { status: 500 });
   }
 }

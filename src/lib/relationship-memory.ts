@@ -260,7 +260,7 @@ export async function storeRelationshipMemory({
       .set({
         status: "failed",
         completedAt: new Date(),
-        errorMessage: error instanceof Error ? error.message : "Unknown sync error",
+        errorMessage: "Relationship sync failed",
       })
       .where(eq(syncRuns.id, syncRun.id));
     throw error;

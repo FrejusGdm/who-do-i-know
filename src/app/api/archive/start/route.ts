@@ -17,16 +17,16 @@ export async function POST(request: Request) {
     after(async () => {
       try {
         await runGoogleArchive(job.id, session.user.id);
-      } catch (error) {
-        console.error(`[GoogleArchive] Job ${job.id} failed:`, error);
+      } catch {
+        console.error("[GoogleArchive] Background archive failed");
       }
     });
 
     return NextResponse.json({ job });
-  } catch (error) {
-    console.error("Google archive start error:", error);
+  } catch {
+    console.error("Google archive start error:");
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to start Google archive" },
+      { error: "Failed to start Google archive" },
       { status: 500 },
     );
   }

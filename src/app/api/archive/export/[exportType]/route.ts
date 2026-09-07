@@ -29,8 +29,8 @@ export async function GET(
         "Content-Disposition": `attachment; filename="google-archive-${exportType}.csv"`,
       },
     });
-  } catch (error) {
-    console.error("Google archive export error:", error);
+  } catch {
+    console.error("Google archive export error:");
     return NextResponse.json({ error: "Failed to export Google archive data" }, { status: 500 });
   }
 }

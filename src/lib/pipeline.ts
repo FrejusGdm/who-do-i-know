@@ -224,8 +224,8 @@ export async function runCloudPipeline(
     if (hasResendKey()) {
       try {
         await sendDownloadEmail(userEmail, downloadUrl);
-      } catch (e) {
-        console.error("Failed to send download email:", e);
+      } catch {
+        console.error("Failed to send download email:");
       }
     } else {
       console.log("[Pipeline] Skipping email — no Resend API key configured");
@@ -234,10 +234,10 @@ export async function runCloudPipeline(
     setTimeout(() => {
       progressStore.delete(jobId);
     }, 60000);
-  } catch (error) {
-    console.error("[Pipeline] FAILED:", error);
+  } catch {
+    console.error("[Pipeline] FAILED:");
     const message =
-      error instanceof Error ? error.message : "Unknown error occurred";
+      "Processing failed. Please try again.";
     await db
       .update(jobs)
       .set({ status: "failed", errorMessage: message })
@@ -255,7 +255,7 @@ export async function cleanupBlob(blobUrl: string): Promise<void> {
   if (!blobUrl.startsWith("http")) return; // Skip local file paths
   try {
     await del(blobUrl);
-  } catch (e) {
-    console.error("Failed to delete blob:", e);
+  } catch {
+    console.error("Failed to delete blob:");
   }
 }

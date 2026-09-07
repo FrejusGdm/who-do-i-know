@@ -149,8 +149,8 @@ export async function extractContacts(
         allContacts.push(...parsed.filter((c) => c.confidence !== "low"));
         success = true;
         break;
-      } catch (e) {
-        console.error(`Model ${m} failed for batch ${i}:`, e);
+      } catch {
+        console.error("Model batch failed");
       }
     }
 

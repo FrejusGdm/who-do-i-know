@@ -59,11 +59,11 @@ export async function POST(req: NextRequest) {
       job.providerMode as LLMProviderMode,
       byokApiKey,
       ollamaModel
-    ).catch((e) => console.error("Pipeline error:", e));
+    ).catch((e) => console.error("Pipeline error:"));
 
     return NextResponse.json({ status: "processing", jobId });
-  } catch (error) {
-    console.error("Process trigger error:", error);
+  } catch {
+    console.error("Process trigger error:");
     return NextResponse.json(
       { error: "Failed to start processing" },
       { status: 500 }

@@ -313,13 +313,13 @@ export async function estimateGoogleArchive(userId: string): Promise<ArchiveJobS
       .where(eq(googleArchiveJobs.id, job.id))
       .returning();
     return updated;
-  } catch (error) {
+  } catch {
     const [failed] = await db
       .update(googleArchiveJobs)
       .set({
         status: "failed",
         completedAt: new Date(),
-        errorMessage: error instanceof Error ? error.message : "Archive estimate failed",
+        errorMessage: "Archive estimate failed",
         updatedAt: new Date(),
       })
       .where(eq(googleArchiveJobs.id, job.id))
@@ -572,9 +572,9 @@ export async function runGoogleArchive(jobId: string, userId: string): Promise<v
           messagesSeen++;
           messagesArchived++;
           bytesArchived += full.sizeEstimate ?? rawMime.length;
-        } catch (error) {
+        } catch {
           failureCount++;
-          console.error("[GoogleArchive] Message archive failed:", listed.id, error);
+          console.error("[GoogleArchive] Message archive failed");
         }
       });
 
@@ -647,15 +647,15 @@ export async function runGoogleArchive(jobId: string, userId: string): Promise<v
     // A failure here must not fail the archive itself.
     try {
       await materializeArchiveMemory(userId);
-    } catch (materializeError) {
-      console.error("[GoogleArchive] Materialize after archive failed:", materializeError);
+    } catch {
+      console.error("[GoogleArchive] Materialization failed");
     }
   } catch (error) {
     await db
       .update(googleArchiveJobs)
       .set({
         status: "failed",
-        errorMessage: error instanceof Error ? error.message : "Google archive failed",
+        errorMessage: "Google archive failed",
         completedAt: new Date(),
         updatedAt: new Date(),
       })
